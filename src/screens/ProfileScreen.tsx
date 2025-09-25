@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 import ProfileHeader from '../components/ProfileHeader';
 import PromoBanner from '../components/PromoBanner';
@@ -8,9 +9,10 @@ import ProfileListItem from '../components/ProfileListItem';
 import { mainMenuItems, supportMenuItems, promoBannerData } from '../data/profileData';
 
 const ProfileScreen: React.FC = () => {
+  const navigation = useNavigation();
+
   const handleLoginPress = () => {
-    console.log('Navegar para tela de login/cadastro');
-    // Implementar navegação para tela de login
+    navigation.navigate('Auth' as never);
   };
 
   const handlePromoBannerPress = () => {
