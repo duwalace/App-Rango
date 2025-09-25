@@ -170,7 +170,6 @@ export const mockRestaurantsList = [
   },
 ];
 
-// Novos dados para endereços
 export const mockAddresses = [
   {
     id: '1',

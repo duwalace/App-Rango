@@ -1,13 +1,87 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import SearchBar from '../components/SearchBar';
+import CategoryCard from '../components/CategoryCard';
+import FullWidthCategoryCard from '../components/FullWidthCategoryCard';
+import { searchSections } from '../data/searchData';
+
+interface Category {
+  id: string;
+  name: string;
+  image: string;
+  color: string;
+  type?: string;
+  subtitle?: string;
+}
+
+interface Section {
+  title: string;
+  data: Category[];
+}
+
 const SearchScreen: React.FC = () => {
+  const [searchText, setSearchText] = useState('');
+
+  const handleCategoryPress = (category: Category) => {
+    console.log('Categoria selecionada:', category.name);
+  };
+
+  const renderCategoryItem = ({ item }: { item: Category }) => {
+    if (item.type === 'full-width') {
+      return (
+        <FullWidthCategoryCard
+          title={item.name}
+          subtitle={item.subtitle}
+          imageSource={item.image}
+          backgroundColor={item.color}
+          onPress={() => handleCategoryPress(item)}
+        />
+      );
+    }
+
+    return (
+      <CategoryCard
+        title={item.name}
+        subtitle={item.subtitle}
+        imageSource={item.image}
+        backgroundColor={item.color}
+        onPress={() => handleCategoryPress(item)}
+      />
+    );
+  };
+
+  const renderSection = ({ item }: { item: Section }) => (
+    <View style={styles.sectionContainer}>
+      <Text style={styles.sectionTitle}>{item.title}</Text>
+      <FlatList
+        data={item.data}
+        renderItem={renderCategoryItem}
+        keyExtractor={(category) => category.id}
+        numColumns={2}
+        columnWrapperStyle={styles.row}
+        scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.content}>
-        <Text style={styles.text}>Tela de Busca</Text>
-      </View>
+      <SearchBar
+        value={searchText}
+        onChangeText={setSearchText}
+        placeholder="O que vai pedir hoje?"
+      />
+      
+      <FlatList
+        data={searchSections}
+        renderItem={renderSection}
+        keyExtractor={(section) => section.title}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      />
     </SafeAreaView>
   );
 };
@@ -15,17 +89,23 @@ const SearchScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#F5F5F5',
   },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
   },
-  text: {
-    fontSize: 18,
-    fontWeight: '600',
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     color: '#333',
+    marginBottom: 16,
+  },
+  row: {
+    justifyContent: 'space-between',
   },
 });
 
