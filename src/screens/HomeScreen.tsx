@@ -2,6 +2,8 @@ import React from 'react';
 import { View, ScrollView, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { HomeStackParamList } from '../types/navigation';
 import HomeHeader from '../components/HomeHeader';
 import CategoriesCarousel from '../components/CategoriesCarousel';
 import RestaurantCarousel from '../components/RestaurantCarousel';
@@ -15,19 +17,28 @@ import {
   mockRestaurantsList
 } from '../data/mockData';
 
+type HomeScreenNavigationProp = StackNavigationProp<HomeStackParamList>;
+
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<HomeScreenNavigationProp>();
 
   const handleAddressChange = () => {
-    navigation.navigate('Address' as never);
+    navigation.navigate('Address');
   };
 
   const handleCategoryPress = (category: any) => {
     console.log('Categoria selecionada:', category.name);
+    navigation.navigate('Category', {
+      categoryId: category.id,
+      categoryName: category.name,
+    });
   };
 
   const handleRestaurantPress = (restaurant: any) => {
     console.log('Restaurante selecionado:', restaurant.name);
+    navigation.navigate('Store', {
+      storeId: restaurant.id,
+    });
   };
 
   const handleFavoritePress = (restaurant: any) => {
@@ -44,6 +55,9 @@ const HomeScreen: React.FC = () => {
 
   const handlePressRestaurant = (restaurant: any) => {
     console.log('Restaurante da lista selecionado:', restaurant.name);
+    navigation.navigate('Store', {
+      storeId: restaurant.id,
+    });
   };
 
   const handleToggleFavorite = (restaurant: any) => {

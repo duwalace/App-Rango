@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { CartProvider } from './src/contexts/CartContext';
 
 import HomeScreen from './src/screens/HomeScreen';
 import SearchScreen from './src/screens/SearchScreen';
@@ -14,6 +15,10 @@ import AddressScreen from './src/screens/AddressScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+import CategoryScreen from './src/screens/CategoryScreen';
+import StoreScreen from './src/screens/StoreScreen';
+import ProductScreen from './src/screens/ProductScreen';
+import CartScreen from './src/screens/CartScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -27,6 +32,34 @@ function HomeStack() {
         name="HomeMain" 
         component={HomeScreen} 
         options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="Category" 
+        component={CategoryScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="Store" 
+        component={StoreScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="Product" 
+        component={ProductScreen} 
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+          animationTypeForReplace: 'push'
+        }}
+      />
+      <Stack.Screen 
+        name="Cart" 
+        component={CartScreen} 
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+          animationTypeForReplace: 'push'
+        }}
       />
       <Stack.Screen 
         name="Address" 
@@ -121,25 +154,27 @@ function TabNavigator() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar style="dark" />
-        <RootStack.Navigator>
-          <RootStack.Screen 
-            name="Main" 
-            component={TabNavigator} 
-            options={{ headerShown: false }}
-          />
-          <RootStack.Screen 
-            name="Auth" 
-            component={AuthStackNavigator} 
-            options={{ 
-              headerShown: false,
-              presentation: 'fullScreenModal',
-              animationTypeForReplace: 'push'
-            }}
-          />
-        </RootStack.Navigator>
-      </NavigationContainer>
+      <CartProvider>
+        <NavigationContainer>
+          <StatusBar style="dark" />
+          <RootStack.Navigator>
+            <RootStack.Screen 
+              name="Main" 
+              component={TabNavigator} 
+              options={{ headerShown: false }}
+            />
+            <RootStack.Screen 
+              name="Auth" 
+              component={AuthStackNavigator} 
+              options={{ 
+                headerShown: false,
+                presentation: 'modal',
+                animationTypeForReplace: 'push'
+              }}
+            />
+          </RootStack.Navigator>
+        </NavigationContainer>
+      </CartProvider>
     </SafeAreaProvider>
   );
 }

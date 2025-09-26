@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { HomeStackParamList } from '../types/navigation';
 
 import SearchBar from '../components/SearchBar';
 import CategoryCard from '../components/CategoryCard';
@@ -21,11 +24,18 @@ interface Section {
   data: Category[];
 }
 
+type SearchScreenNavigationProp = StackNavigationProp<HomeStackParamList>;
+
 const SearchScreen: React.FC = () => {
+  const navigation = useNavigation<SearchScreenNavigationProp>();
   const [searchText, setSearchText] = useState('');
 
   const handleCategoryPress = (category: Category) => {
     console.log('Categoria selecionada:', category.name);
+    navigation.navigate('Category', {
+      categoryId: category.id,
+      categoryName: category.name,
+    });
   };
 
   const renderCategoryItem = ({ item }: { item: Category }) => {
