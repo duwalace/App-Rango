@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
+
+// Importe o serviço de autenticação
+import { signUp } from '../services/authService';
 
 import AuthHeader from '../components/AuthHeader';
 import FormInput from '../components/FormInput';
@@ -15,6 +19,10 @@ const SignupScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Estados para loading e erro
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
   const isFormValid = 
     fullName.trim() !== '' && 
     email.trim() !== '' && 
@@ -22,9 +30,38 @@ const SignupScreen: React.FC = () => {
     confirmPassword.trim() !== '' &&
     password === confirmPassword;
 
-  const handleSignup = () => {
-    console.log('Cadastro:', { fullName, email, password });
-    // Implementar lógica de cadastro
+  const handleSignup = async () => {
+    setLoading(true);
+    setError(''); // Limpa erros anteriores
+
+    try {
+      // Chama a função de cadastro do nosso serviço
+      const { user, role } = await signUp(fullName, email, password, 'cliente');
+      console.log('Cadastro bem-sucedido!', user.uid, 'Papel:', role);
+      
+      // Navegar de volta para a tela principal
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        })
+      );
+      
+    } catch (err: any) {
+      // Trata os erros comuns de cadastro do Firebase
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Este e-mail já está sendo usado por outra conta.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('A senha deve ter pelo menos 6 caracteres.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('E-mail inválido.');
+      } else {
+        setError('Ocorreu um erro ao tentar criar a conta.');
+      }
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoToLogin = () => {
@@ -48,6 +85,9 @@ const SignupScreen: React.FC = () => {
             <Text style={styles.title}>Criar nova conta</Text>
             
             <View style={styles.form}>
+              {/* Exibir erro se houver */}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              
               <FormInput
                 placeholder="Nome completo"
                 value={fullName}
@@ -78,9 +118,9 @@ const SignupScreen: React.FC = () => {
             
             <View style={styles.buttonContainer}>
               <PrimaryButton
-                title="Criar conta"
+                title={loading ? "Criando conta..." : "Criar conta"}
                 onPress={handleSignup}
-                disabled={!isFormValid}
+                disabled={!isFormValid || loading}
               />
               
               <SecondaryLink
@@ -128,6 +168,17 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     marginBottom: 10,
     gap: 16,
+  },
+  errorText: {
+    color: '#EA1D2C',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+    backgroundColor: '#FFF5F5',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
   },
 });
 

@@ -4,39 +4,30 @@ import {
   Text,
   Image,
   ScrollView,
-  TextInput,
   TouchableOpacity,
+  TextInput,
   StyleSheet,
-  SafeAreaView,
-  Dimensions,
   Alert,
+  Dimensions,
 } from 'react-native';
-import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../contexts/CartContext';
 import QuantityStepper from '../components/QuantityStepper';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.4;
 
-type ProductScreenRouteProp = RouteProp<{
-  Product: {
-    productId: string;
-    product: any;
-    store: any;
-  };
-}, 'Product'>;
-
 const ProductScreen: React.FC = () => {
-  const route = useRoute<ProductScreenRouteProp>();
   const navigation = useNavigation();
+  const route = useRoute();
+  const { product, store } = route.params as any;
   const { addItem, setStore } = useCart();
-  
-  const { product, store } = route.params;
-  
+
   const [quantity, setQuantity] = useState(1);
   const [observations, setObservations] = useState('');
-  
+
   const maxObservations = 140;
   const unitPrice = parseFloat(product.price.replace('R$ ', '').replace(',', '.'));
   const totalPrice = unitPrice * quantity;
@@ -50,43 +41,36 @@ const ProductScreen: React.FC = () => {
   }, []);
 
   const handleAddToCart = useCallback(() => {
-    // Configurar a loja no contexto se ainda não estiver definida
-    setStore({
-      id: store.id,
-      name: store.name,
-      logo: store.logo,
-      deliveryTime: store.deliveryTime,
-      deliveryFee: parseFloat(store.deliveryFee.replace('R$ ', '').replace(',', '.')),
-    });
+    try {
+      // Configurar a loja no contexto se ainda não estiver definida
+      setStore({
+        id: store.id,
+        name: store.name,
+        logo: store.logo,
+        deliveryTime: store.deliveryTime,
+        deliveryFee: parseFloat(store.deliveryFee.replace('R$ ', '').replace(',', '.')),
+      });
 
-    // Adicionar item ao carrinho
-    addItem({
-      id: `${product.id}-${Date.now()}`, // ID único para permitir mesmo produto com observações diferentes
-      name: product.name,
-      description: product.description,
-      price: unitPrice,
-      image: product.image,
-      observations: observations.trim(),
-      storeId: store.id,
-      storeName: store.name,
-      quantity,
-    });
+      // Adicionar item ao carrinho
+      addItem({
+        id: `${product.id}-${Date.now()}`,
+        name: product.name,
+        description: product.description,
+        price: unitPrice,
+        image: product.image,
+        observations: observations.trim(),
+        storeId: store.id,
+        storeName: store.name,
+        quantity,
+      });
 
-    Alert.alert(
-      'Adicionado à sacola!',
-      `${quantity}x ${product.name} foi adicionado à sua sacola.`,
-      [
-        {
-          text: 'Continuar comprando',
-          style: 'cancel',
-          onPress: () => navigation.goBack(),
-        },
-        {
-          text: 'Ver sacola',
-          onPress: () => navigation.navigate('Cart' as never),
-        },
-      ]
-    );
+      // Navegar diretamente para o CartScreen
+      console.log('Navegando para Cart...');
+      navigation.navigate('Cart' as never);
+    } catch (error) {
+      console.error('Erro ao adicionar ao carrinho:', error);
+      Alert.alert('Erro', 'Não foi possível adicionar o item ao carrinho.');
+    }
   }, [product, store, quantity, observations, addItem, setStore, navigation]);
 
   const formatPrice = (price: number) => {
@@ -99,84 +83,69 @@ const ProductScreen: React.FC = () => {
       <View style={styles.imageSection}>
         <Image source={{ uri: product.image }} style={styles.productImage} />
         
-        {/* Botão de Voltar */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        
-        {/* Card de Informações do Restaurante */}
-        <View style={styles.storeInfoCard}>
-          <Image source={{ uri: store.logo }} style={styles.storeLogo} />
-          <View style={styles.storeDetails}>
-            <Text style={styles.storeName}>{store.name}</Text>
-            <View style={styles.storeMetrics}>
-              <View style={styles.storeMetric}>
-                <Ionicons name="time-outline" size={14} color="#666" />
-                <Text style={styles.storeMetricText}>{store.deliveryTime}</Text>
-              </View>
-              <View style={styles.storeMetric}>
-                <Ionicons name="bicycle-outline" size={14} color="#666" />
-                <Text style={styles.storeMetricText}>{store.deliveryFee}</Text>
-              </View>
-            </View>
-          </View>
+        {/* Header Flutuante */}
+        <View style={styles.floatingHeader}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color="#333" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => {/* Implementar compartilhar */}}
+          >
+            <Ionicons name="share-outline" size={24} color="#333" />
+          </TouchableOpacity>
         </View>
       </View>
 
       {/* Conteúdo Rolável */}
-      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Informações do Produto */}
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.productDescription}>{product.description}</Text>
-          
-          {/* Informação Adicional */}
-          <Text style={styles.servingInfo}>Serve até 1 pessoa</Text>
-          
-          {/* Preço */}
           <Text style={styles.productPrice}>{product.price}</Text>
         </View>
 
-        {/* Campo de Observações */}
+        {/* Observações */}
         <View style={styles.observationsSection}>
-          <Text style={styles.observationsTitle}>💬 Alguma observação?</Text>
-          <View style={styles.observationsInputContainer}>
+          <Text style={styles.sectionTitle}>Observações</Text>
+          <Text style={styles.observationsHint}>
+            Alguma observação? Não se preocupe, o restaurante sempre pode entrar em contato.
+          </Text>
+          
+          <View style={styles.textInputContainer}>
             <TextInput
               style={styles.observationsInput}
-              placeholder="Ex: tirar a cebola..."
+              placeholder="Ex: tirar cebola, maionese à parte, ponto da carne..."
               placeholderTextColor="#999"
-              multiline
-              maxLength={maxObservations}
               value={observations}
               onChangeText={setObservations}
+              multiline
+              maxLength={maxObservations}
               textAlignVertical="top"
             />
-            <Text style={styles.characterCounter}>
+            <Text style={styles.characterCount}>
               {observations.length}/{maxObservations}
             </Text>
           </View>
         </View>
-
-        {/* Espaço para o rodapé fixo */}
-        <View style={styles.footerSpacer} />
       </ScrollView>
 
-      {/* Rodapé de Ações Fixo */}
-      <View style={styles.stickyFooter}>
-        <View style={styles.footerContent}>
-          {/* Seletor de Quantidade */}
-          <View style={styles.quantitySection}>
-            <QuantityStepper
-              quantity={quantity}
-              onIncrease={handleIncreaseQuantity}
-              onDecrease={handleDecreaseQuantity}
-              size="large"
-            />
-          </View>
-          
+      {/* Footer Fixo */}
+      <View style={styles.footer}>
+        <View style={styles.quantitySection}>
+          <QuantityStepper
+            quantity={quantity}
+            onIncrease={handleIncreaseQuantity}
+            onDecrease={handleDecreaseQuantity}
+          />
+        </View>
+
+        <View style={styles.addButtonSection}>
           {/* Botão de Adicionar */}
           <TouchableOpacity
             style={styles.addButton}
@@ -207,62 +176,29 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-  backButton: {
+  floatingHeader: {
     position: 'absolute',
-    top: 50,
-    left: 16,
+    top: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  storeInfoCard: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
   },
-  storeLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
-  },
-  storeDetails: {
-    flex: 1,
-  },
-  storeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  storeMetrics: {
-    flexDirection: 'row',
-  },
-  storeMetric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  storeMetricText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  scrollContent: {
+  scrollView: {
     flex: 1,
   },
   productInfo: {
@@ -280,11 +216,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 12,
   },
-  servingInfo: {
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 16,
-  },
   productPrice: {
     fontSize: 20,
     fontWeight: '700',
@@ -292,15 +223,22 @@ const styles = StyleSheet.create({
   },
   observationsSection: {
     padding: 20,
-    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
   },
-  observationsTitle: {
-    fontSize: 16,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  observationsInputContainer: {
+  observationsHint: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  textInputContainer: {
     position: 'relative',
   },
   observationsInput: {
@@ -313,21 +251,14 @@ const styles = StyleSheet.create({
     minHeight: 80,
     maxHeight: 120,
   },
-  characterCounter: {
+  characterCount: {
     position: 'absolute',
     bottom: 8,
     right: 12,
     fontSize: 12,
     color: '#999',
   },
-  footerSpacer: {
-    height: 100,
-  },
-  stickyFooter: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  footer: {
     backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: '#E5E5E5',
@@ -346,8 +277,10 @@ const styles = StyleSheet.create({
   quantitySection: {
     marginRight: 16,
   },
-  addButton: {
+  addButtonSection: {
     flex: 1,
+  },
+  addButton: {
     backgroundColor: '#EA1D2C',
     borderRadius: 8,
     paddingVertical: 16,
