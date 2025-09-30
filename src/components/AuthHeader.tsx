@@ -7,7 +7,9 @@ const AuthHeader: React.FC = () => {
   const navigation = useNavigation();
 
   const handleBack = () => {
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   };
 
   return (

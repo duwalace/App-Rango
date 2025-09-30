@@ -17,7 +17,10 @@ const AuthScreen: React.FC = () => {
   const navigation = useNavigation();
 
   const handleBack = () => {
-    navigation.goBack();
+    // Como agora é um modal, sempre podemos voltar para a tela principal
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   };
 
   const handleHelp = () => {
@@ -41,6 +44,10 @@ const AuthScreen: React.FC = () => {
   const handleFacebookLogin = () => {
     console.log('Login com Facebook');
     // Implementar autenticação com Facebook
+  };
+
+  const handleDeliveryLogin = () => {
+    navigation.navigate('DeliveryAuth' as never);
   };
 
   return (
@@ -79,6 +86,12 @@ const AuthScreen: React.FC = () => {
               title="Criar nova conta"
               variant="secondary"
               onPress={handleRegister}
+            />
+            
+            <AuthButton
+              title="Seja entregador"
+              variant="secondary"
+              onPress={handleDeliveryLogin}
             />
           </View>
           

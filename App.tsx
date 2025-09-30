@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,19 +10,28 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { CartProvider } from './src/contexts/CartContext';
 
 // Importe suas telas
-import LoginScreen from './src/screens/LoginScreen';
-import SignupScreen from './src/screens/SignupScreen';
-import AuthScreen from './src/screens/AuthScreen';
-import PerfilLogadoScreen from './src/screens/PerfilLogado';
-import HomeScreen from './src/screens/HomeScreen';
-import SearchScreen from './src/screens/SearchScreen';
-import OrdersScreen from './src/screens/OrdersScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import AddressScreen from './src/screens/AddressScreen';
-import CategoryScreen from './src/screens/CategoryScreen';
-import StoreScreen from './src/screens/StoreScreen';
-import ProductScreen from './src/screens/ProductScreen';
-import CartScreen from './src/screens/CartScreen';
+import LoginScreen from './src/Cliente/LoginScreen';
+import SignupScreen from './src/Cliente/SignupScreen';
+import AuthScreen from './src/Cliente/AuthScreen';
+import DeliveryAuthScreen from './src/Entregador/DeliveryAuthScreen';
+import DeliveryLoginScreen from './src/Entregador/DeliveryLoginScreen';
+import DeliverySignupScreen from './src/Entregador/DeliverySignupScreen';
+import DeliveryVerificationScreen from './src/Entregador/DeliveryVerificationScreen';
+import DeliveryDocumentsScreen from './src/Entregador/DeliveryDocumentsScreen';
+import DeliveryConfirmationScreen from './src/Entregador/DeliveryConfirmationScreen';
+import DeliveryDashboardScreen from './src/Entregador/DeliveryDashboardScreen';
+import DeliveryProfileScreen from './src/Entregador/DeliveryProfileScreen';
+import LoadingScreen from './src/components/LoadingScreen';
+import PerfilLogadoScreen from './src/Cliente/PerfilLogado';
+import HomeScreen from './src/Cliente/HomeScreen';
+import SearchScreen from './src/Cliente/SearchScreen';
+import OrdersScreen from './src/Cliente/OrdersScreen';
+import ProfileScreen from './src/Cliente/ProfileScreen';
+import AddressScreen from './src/Cliente/AddressScreen';
+import CategoryScreen from './src/Cliente/CategoryScreen';
+import StoreScreen from './src/Cliente/StoreScreen';
+import ProductScreen from './src/Cliente/ProductScreen';
+import CartScreen from './src/Cliente/CartScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -34,6 +44,12 @@ function AuthStackNavigator() {
       <AuthStack.Screen name="AuthMain" component={AuthScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Signup" component={SignupScreen} />
+      <AuthStack.Screen name="DeliveryAuth" component={DeliveryAuthScreen} />
+      <AuthStack.Screen name="DeliveryLogin" component={DeliveryLoginScreen} />
+      <AuthStack.Screen name="DeliverySignup" component={DeliverySignupScreen} />
+      <AuthStack.Screen name="DeliveryVerification" component={DeliveryVerificationScreen} />
+      <AuthStack.Screen name="DeliveryDocuments" component={DeliveryDocumentsScreen} />
+      <AuthStack.Screen name="DeliveryConfirmation" component={DeliveryConfirmationScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -64,17 +80,89 @@ function HomeStack() {
   );
 }
 
-// Stack para a aba Perfil (quando logado)
+// Stack para a aba Perfil
 function ProfileStack() {
+  const { usuarioLogado, userRole } = useAuth();
+  
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ProfileMain" component={PerfilLogadoScreen} />
+      {!usuarioLogado ? (
+        <Stack.Screen 
+          name="ProfileMain" 
+          component={ProfileScreen} 
+        />
+      ) : userRole === 'entregador' ? (
+        <Stack.Screen 
+          name="ProfileMain" 
+          component={DeliveryProfileScreen} 
+        />
+      ) : (
+        <Stack.Screen 
+          name="ProfileMain" 
+          component={PerfilLogadoScreen} 
+        />
+      )}
     </Stack.Navigator>
   );
 }
 
-// Navegador para quando o usuário ESTÁ LOGADO (com abas na parte inferior)
-function AppLogadoNavigator() {
+
+
+// Navegador principal que sempre mostra as abas
+function MainNavigator() {
+  const { userRole, usuarioLogado } = useAuth();
+  
+  console.log('=== MAINNAVIGATOR RENDER ===');
+  console.log('UserRole:', userRole);
+  console.log('UsuarioLogado:', usuarioLogado?.email || 'null');
+  
+  // Se for entregador, mostrar interface específica
+  if (userRole === 'entregador') {
+    console.log('Renderizando interface do ENTREGADOR...');
+    return (
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName: keyof typeof Ionicons.glyphMap;
+
+            if (route.name === 'Dashboard') {
+              iconName = focused ? 'speedometer' : 'speedometer-outline';
+            } else if (route.name === 'Entregas') {
+              iconName = focused ? 'bicycle' : 'bicycle-outline';
+            } else if (route.name === 'Ganhos') {
+              iconName = focused ? 'wallet' : 'wallet-outline';
+            } else if (route.name === 'Perfil') {
+              iconName = focused ? 'person' : 'person-outline';
+            } else {
+              iconName = 'speedometer-outline';
+            }
+
+            return <Ionicons name={iconName} size={size} color={color} />;
+          },
+          tabBarActiveTintColor: '#EA1D2C',
+          tabBarInactiveTintColor: 'gray',
+          tabBarStyle: {
+            backgroundColor: 'white',
+            borderTopWidth: 1,
+            borderTopColor: '#E5E5E5',
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '500',
+          },
+        })}
+      >
+        <Tab.Screen name="Dashboard" component={DeliveryDashboardScreen} />
+        <Tab.Screen name="Entregas" component={OrdersScreen} />
+        <Tab.Screen name="Ganhos" component={SearchScreen} />
+        <Tab.Screen name="Perfil" component={ProfileStack} />
+      </Tab.Navigator>
+    );
+  }
+  
+  // Interface padrão para clientes
+  console.log('Renderizando interface do CLIENTE...');
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -119,19 +207,30 @@ function AppLogadoNavigator() {
 
 // O "GPS" principal que decide qual navegador mostrar
 function RootNavigator() {
-  const { usuarioLogado } = useAuth();
+  const { loading, usuarioLogado, userRole } = useAuth();
 
+  console.log('=== ROOTNAVIGATOR RENDER ===');
+  console.log('Loading:', loading);
+  console.log('UsuarioLogado:', usuarioLogado?.email || 'null');
+  console.log('UserRole:', userRole);
+
+  if (loading) {
+    console.log('Mostrando LoadingScreen...');
+    return <LoadingScreen />;
+  }
+
+  console.log('Renderizando NavigationContainer...');
   return (
     <NavigationContainer>
       <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {usuarioLogado ? (
-          // Se está logado, mostra o navegador com abas
-          <Stack.Screen name="AppLogado" component={AppLogadoNavigator} />
-        ) : (
-          // Se não está logado, mostra o stack de autenticação
-          <Stack.Screen name="Auth" component={AuthStackNavigator} />
-        )}
+        {/* Sempre mostrar interface principal primeiro */}
+        <Stack.Screen name="Main" component={MainNavigator} />
+        <Stack.Screen 
+          name="Auth" 
+          component={AuthStackNavigator}
+          options={{ presentation: 'modal' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

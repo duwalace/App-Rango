@@ -2,20 +2,18 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-// Remova CommonActions, não vamos mais precisar dele aqui
-// import { CommonActions } from '@react-navigation/native';
 
 import { signIn } from '../services/authService';
-import { useAuth } from '../contexts/AuthContext'; // <--- MUDANÇA 1: Importe o useAuth
+import { useAuth } from '../contexts/AuthContext';
 
 import AuthHeader from '../components/AuthHeader';
 import FormInput from '../components/FormInput';
 import PrimaryButton from '../components/PrimaryButton';
 import SecondaryLink from '../components/SecondaryLink';
 
-const LoginScreen: React.FC = () => {
+const DeliveryLoginScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { login } = useAuth(); // <--- MUDANÇA 2: Pegue a função 'login' do contexto
+  const { login } = useAuth();
 
   // Estados do formulário
   const [email, setEmail] = useState('');
@@ -33,39 +31,36 @@ const LoginScreen: React.FC = () => {
 
     try {
       const { user, role } = await signIn(email, password);
-      console.log('Login bem-sucedido!', user.uid, 'Papel:', role);
       
-      // AVISAR O APP QUE O USUÁRIO ENTROU!
-      // É essa linha que dispara a troca de tela no App.tsx.
-      login(user);
-      
-      // IMPORTANTE: VOCÊ PODE REMOVER O CÓDIGO ABAIXO!
-      // A navegação agora é controlada pelo estado (logado/deslogado)
-      // no App.tsx, então não precisamos mais navegar manualmente.
-      /*
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'Main' }],
-        })
-      );
-      */
-      
-    } catch (err: any) {
-      // Seu tratamento de erro (que já está ótimo)
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('E-mail ou senha inválidos.');
-      } else {
-        setError('Ocorreu um erro ao tentar fazer o login.');
+      // Verificar se o usuário é realmente um entregador
+      if (role !== 'entregador') {
+        setError('Esta conta não é de entregador. Use o login de cliente.');
+        setLoading(false);
+        return;
       }
-      console.error(err);
+      
+      console.log('Login de entregador bem-sucedido!', user.uid, 'Papel:', role);
+      
+      // Avisar o app que o usuário entrou
+      login(user, role);
+      
+      // Fechar o modal de autenticação e voltar para a tela principal
+      navigation.navigate('Main' as never);
+      
+    } catch (error: any) {
+      console.error('Erro no login:', error);
+      setError(error.message || 'Erro ao fazer login. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleGoToSignup = () => {
+    navigation.navigate('DeliverySignup' as never);
+  };
+
   const handleForgotPassword = () => {
-    console.log('Esqueci minha senha');
+    console.log('Esqueci minha senha - Entregador');
     // Implementar navegação para tela de recuperação de senha
   };
 
@@ -83,30 +78,33 @@ const LoginScreen: React.FC = () => {
           <AuthHeader />
           
           <View style={styles.content}>
-            <Text style={styles.title}>Entrar na sua conta</Text>
+            <View style={styles.headerSection}>
+              <Text style={styles.title}>Entrar como Entregador</Text>
+              <Text style={styles.subtitle}>
+                Acesse sua conta de entregador e comece a trabalhar
+              </Text>
+            </View>
+            
+            {error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
             
             <View style={styles.form}>
-              {/* Exibir erro se houver */}
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              
               <FormInput
-                placeholder="E-mail"
+                placeholder="Digite seu e-mail"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
+                autoCapitalize="none"
               />
               
               <FormInput
-                placeholder="Senha"
+                placeholder="Digite sua senha"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={true}
-              />
-              
-              <SecondaryLink
-                text="Esqueci minha senha"
-                onPress={handleForgotPassword}
-                align="right"
               />
             </View>
             
@@ -115,6 +113,18 @@ const LoginScreen: React.FC = () => {
                 title={loading ? "Entrando..." : "Entrar"}
                 onPress={handleLogin}
                 disabled={!isFormValid || loading}
+              />
+              
+              <SecondaryLink
+                text="Esqueci minha senha"
+                onPress={handleForgotPassword}
+                align="center"
+              />
+              
+              <SecondaryLink
+                text="Não tem conta? Cadastre-se aqui"
+                onPress={handleGoToSignup}
+                align="center"
               />
             </View>
           </View>
@@ -140,33 +150,46 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    justifyContent: 'space-between',
+    padding: 24,
+    paddingTop: 40,
+  },
+  headerSection: {
+    marginBottom: 32,
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 32,
-  },
-  form: {
-    flex: 1,
-  },
-  buttonContainer: {
-    paddingBottom: 20,
-    marginBottom: 10,
-  },
-  errorText: {
-    color: '#EA1D2C',
-    fontSize: 14,
-    marginBottom: 16,
+    marginBottom: 8,
     textAlign: 'center',
-    backgroundColor: '#FFF5F5',
-    padding: 12,
-    borderRadius: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  errorContainer: {
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 24,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  form: {
+    gap: 20,
+    marginBottom: 32,
+  },
+  buttonContainer: {
+    gap: 16,
   },
 });
 
-export default LoginScreen;
+export default DeliveryLoginScreen;

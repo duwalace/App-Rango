@@ -78,7 +78,11 @@ const StoreHeader: React.FC<StoreHeaderProps> = ({
         <View style={styles.floatingButtons}>
           <TouchableOpacity 
             style={styles.floatingButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              }
+            }}
           >
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>

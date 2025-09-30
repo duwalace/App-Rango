@@ -20,7 +20,11 @@ const CategoryHeader: React.FC<CategoryHeaderProps> = ({
     <View style={styles.container}>
       <TouchableOpacity 
         style={styles.backButton}
-        onPress={() => navigation.goBack()}
+        onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          }
+        }}
       >
         <Ionicons name="arrow-back" size={24} color="#333" />
       </TouchableOpacity>

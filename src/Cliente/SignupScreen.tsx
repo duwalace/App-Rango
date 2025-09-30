@@ -6,6 +6,7 @@ import { CommonActions } from '@react-navigation/native';
 
 // Importe o serviço de autenticação
 import { signUp } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 
 import AuthHeader from '../components/AuthHeader';
 import FormInput from '../components/FormInput';
@@ -14,6 +15,7 @@ import SecondaryLink from '../components/SecondaryLink';
 
 const SignupScreen: React.FC = () => {
   const navigation = useNavigation();
+  const { login } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,13 +41,11 @@ const SignupScreen: React.FC = () => {
       const { user, role } = await signUp(fullName, email, password, 'cliente');
       console.log('Cadastro bem-sucedido!', user.uid, 'Papel:', role);
       
-      // Navegar de volta para a tela principal
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'Main' }],
-        })
-      );
+      // Fazer login automático após cadastro
+      login(user, role);
+      
+      // Fechar o modal de autenticação e voltar para a tela principal
+      navigation.navigate('Main' as never);
       
     } catch (err: any) {
       // Trata os erros comuns de cadastro do Firebase

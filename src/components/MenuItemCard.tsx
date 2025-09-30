@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { shadowPresets } from '../utils/shadowUtils';
 
 interface MenuItem {
   id: string;
@@ -91,11 +92,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 8,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...shadowPresets.small,
   },
   contentContainer: {
     flexDirection: 'row',
@@ -191,11 +188,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EA1D2C',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    ...shadowPresets.button,
   },
   addButtonText: {
     color: 'white',

@@ -87,7 +87,11 @@ const ProductScreen: React.FC = () => {
         <View style={styles.floatingHeader}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              }
+            }}
           >
             <Ionicons name="chevron-back" size={24} color="#333" />
           </TouchableOpacity>

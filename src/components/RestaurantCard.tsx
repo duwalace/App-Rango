@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { shadowPresets } from '../utils/shadowUtils';
 
 interface Restaurant {
   id: string;
@@ -73,11 +74,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
     backgroundColor: 'white',
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadowPresets.card,
   },
   imageContainer: {
     position: 'relative',

@@ -23,7 +23,9 @@ const CartScreen: React.FC = () => {
   const itemCount = getItemCount();
 
   const handleDismiss = useCallback(() => {
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   }, [navigation]);
 
   const handleClear = useCallback(() => {
@@ -63,7 +65,9 @@ const CartScreen: React.FC = () => {
   }, [removeItem]);
 
   const handleAddMoreItems = useCallback(() => {
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   }, [navigation]);
 
   const handleContinue = useCallback(() => {

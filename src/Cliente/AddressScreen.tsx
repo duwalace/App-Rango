@@ -15,7 +15,9 @@ const AddressScreen: React.FC = () => {
   const [addresses, setAddresses] = useState(mockAddresses);
 
   const handleBack = () => {
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   };
 
   const handleUseCurrentLocation = () => {
@@ -33,7 +35,9 @@ const AddressScreen: React.FC = () => {
     
     // Voltar para a tela anterior após selecionar
     setTimeout(() => {
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
     }, 300);
   };
 
