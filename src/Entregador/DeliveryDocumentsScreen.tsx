@@ -16,6 +16,8 @@ import { signUp } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
 import AuthHeader from '../components/AuthHeader';
 import PrimaryButton from '../components/PrimaryButton';
+import * as ImagePicker from 'expo-image-picker';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface DocumentItem {
   id: string;
@@ -81,39 +83,41 @@ const DeliveryDocumentsScreen: React.FC = () => {
     },
   ]);
 
-  const handleSelfieUpload = () => {
-    Alert.alert(
-      'Tirar Selfie',
-      'Escolha uma opção:',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Câmera',
-          onPress: () => {
-            console.log('Abrindo câmera para selfie');
-            // Simular upload bem-sucedido
-            setTimeout(() => {
-              updateDocumentStatus('1', true);
-              Alert.alert('Sucesso', 'Selfie enviada com sucesso!');
-            }, 1000);
-          },
-        },
-        {
-          text: 'Galeria',
-          onPress: () => {
-            console.log('Abrindo galeria para selfie');
-            // Simular upload bem-sucedido
-            setTimeout(() => {
-              updateDocumentStatus('1', true);
-              Alert.alert('Sucesso', 'Selfie enviada com sucesso!');
-            }, 1000);
-          },
-        },
-      ]
-    );
+  const handleSelfieUpload = async () => {
+    // Solicitar permissões
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Erro', 'Permissão para acessar a galeria é necessária!');
+      return;
+    }
+  
+    // Abrir seletor de imagem
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+  
+    if (!result.canceled) {
+      // Upload para Firebase Storage
+      const uploadImage = async (uri: string) => {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const storage = getStorage();
+        const imageRef = ref(storage, `documents/${Date.now()}_selfie.jpg`);
+        await uploadBytes(imageRef, blob);
+        return await getDownloadURL(imageRef);
+      };
+  
+      try {
+        const downloadURL = await uploadImage(result.assets[0].uri);
+        updateDocumentStatus('1', true);
+        Alert.alert('Sucesso', 'Selfie enviada com sucesso!');
+      } catch (error) {
+        Alert.alert('Erro', 'Falha ao enviar imagem. Tente novamente.');
+      }
+    }
   };
 
   const handleDocumentUpload = () => {
@@ -290,7 +294,7 @@ const DeliveryDocumentsScreen: React.FC = () => {
             } catch (error) {
               console.error('=== ERRO NO PROCESSO ===');
               console.error('Erro completo:', error);
-              console.error('Stack trace:', error.stack);
+              console.error('Stack trace:', (error as Error).stack);
               Alert.alert(
                 'Erro',
                 'Ocorreu um erro ao finalizar seu cadastro. Tente novamente.',

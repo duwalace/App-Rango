@@ -45,7 +45,7 @@ const DeliveryDashboardScreen: React.FC = () => {
 
   const MapsToWallet = () => {
     console.log('Navegar para carteira - Cards de ganhos clicados');
-    // Implementar navegação para tela de carteira
+    navigation.navigate('DeliveryWallet' as never);
   };
 
   const handleGoOnline = () => {

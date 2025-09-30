@@ -3,15 +3,15 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// SEU OBJETO DE CONFIGURAÇÃO DO FIREBASE VAI AQUI
+// Configuração do Firebase - Projeto: apprango-81562
 const firebaseConfig = {
-  apiKey: "AIzaSyB7GGijIfop9_47FCxnZYW1H6MmP4IZb1Y",
-  authDomain: "rango-app-4ccbd.firebaseapp.com",
-  projectId: "rango-app-4ccbd",
-  storageBucket: "rango-app-4ccbd.firebasestorage.app",
-  messagingSenderId: "481170586903",
-  appId: "1:481170586903:web:12bc18eaa0acfc1a8e8b52",
-  measurementId: "G-J6DK5GHZTF"
+  apiKey: "AIzaSyA-qPqdBBchmdFcqV4yjTn2ZM3LUO8OobI",
+  authDomain: "apprango-81562.firebaseapp.com",
+  projectId: "apprango-81562",
+  storageBucket: "apprango-81562.firebasestorage.app",
+  messagingSenderId: "50042762219",
+  appId: "1:50042762219:web:d873994104609ecbcc5fae",
+  measurementId: "G-KFTWJPB3KE"
 };
 
 // Inicializa o Firebase

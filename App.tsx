@@ -21,6 +21,11 @@ import DeliveryDocumentsScreen from './src/Entregador/DeliveryDocumentsScreen';
 import DeliveryConfirmationScreen from './src/Entregador/DeliveryConfirmationScreen';
 import DeliveryDashboardScreen from './src/Entregador/DeliveryDashboardScreen';
 import DeliveryProfileScreen from './src/Entregador/DeliveryProfileScreen';
+import DeliveryTripDetailsScreen from './src/Entregador/DeliveryTripDetailsScreen';
+import DeliveryRouteScreen from './src/Entregador/DeliveryRouteScreen';
+import DeliveryHistoryScreen from './src/Entregador/DeliveryHistoryScreen';
+import DeliveryCompletionScreen from './src/Entregador/DeliveryCompletionScreen';
+import DeliveryWalletScreen from './src/Entregador/DeliveryWalletScreen';
 import LoadingScreen from './src/components/LoadingScreen';
 import PerfilLogadoScreen from './src/Cliente/PerfilLogado';
 import HomeScreen from './src/Cliente/HomeScreen';
@@ -54,52 +59,40 @@ function AuthStackNavigator() {
   );
 }
 
-// Stack para a aba Início (quando logado)
+// Stack da tela inicial (Home)
 function HomeStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
       <Stack.Screen name="Category" component={CategoryScreen} />
       <Stack.Screen name="Store" component={StoreScreen} />
-      <Stack.Screen 
-        name="Product" 
-        component={ProductScreen} 
-        options={{ presentation: 'modal' }}
-      />
-      <Stack.Screen 
-        name="Cart" 
-        component={CartScreen} 
-        options={{ presentation: 'modal' }}
-      />
-      <Stack.Screen 
-        name="Address" 
-        component={AddressScreen} 
-        options={{ presentation: 'modal' }}
-      />
+      <Stack.Screen name="Product" component={ProductScreen} />
+      <Stack.Screen name="Cart" component={CartScreen} />
+      <Stack.Screen name="Address" component={AddressScreen} />
     </Stack.Navigator>
   );
 }
 
-// Stack para a aba Perfil
+// Stack do perfil
 function ProfileStack() {
   const { usuarioLogado, userRole } = useAuth();
   
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!usuarioLogado ? (
-        <Stack.Screen 
-          name="ProfileMain" 
-          component={ProfileScreen} 
-        />
-      ) : userRole === 'entregador' ? (
+      {usuarioLogado && userRole === 'entregador' ? (
         <Stack.Screen 
           name="ProfileMain" 
           component={DeliveryProfileScreen} 
         />
-      ) : (
+      ) : usuarioLogado ? (
         <Stack.Screen 
           name="ProfileMain" 
           component={PerfilLogadoScreen} 
+        />
+      ) : (
+        <Stack.Screen 
+          name="ProfileMain" 
+          component={ProfileScreen} 
         />
       )}
     </Stack.Navigator>
@@ -118,7 +111,7 @@ function MainNavigator() {
   
   // Se for entregador, mostrar interface específica
   if (userRole === 'entregador') {
-    console.log('Renderizando interface do ENTREGADOR...');
+    console.log('🚚 Renderizando interface do ENTREGADOR...');
     return (
       <Tab.Navigator
         screenOptions={({ route }) => ({
@@ -130,7 +123,7 @@ function MainNavigator() {
               iconName = focused ? 'speedometer' : 'speedometer-outline';
             } else if (route.name === 'Entregas') {
               iconName = focused ? 'bicycle' : 'bicycle-outline';
-            } else if (route.name === 'Ganhos') {
+            } else if (route.name === 'Carteira') {
               iconName = focused ? 'wallet' : 'wallet-outline';
             } else if (route.name === 'Perfil') {
               iconName = focused ? 'person' : 'person-outline';
@@ -154,15 +147,15 @@ function MainNavigator() {
         })}
       >
         <Tab.Screen name="Dashboard" component={DeliveryDashboardScreen} />
-        <Tab.Screen name="Entregas" component={OrdersScreen} />
-        <Tab.Screen name="Ganhos" component={SearchScreen} />
+        <Tab.Screen name="Entregas" component={DeliveryHistoryScreen} />
+        <Tab.Screen name="Carteira" component={DeliveryWalletScreen} />
         <Tab.Screen name="Perfil" component={ProfileStack} />
       </Tab.Navigator>
     );
   }
   
   // Interface padrão para clientes
-  console.log('Renderizando interface do CLIENTE...');
+  console.log('👤 Renderizando interface do CLIENTE...');
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -215,22 +208,38 @@ function RootNavigator() {
   console.log('UserRole:', userRole);
 
   if (loading) {
-    console.log('Mostrando LoadingScreen...');
+    console.log('⏳ Mostrando LoadingScreen...');
     return <LoadingScreen />;
   }
 
-  console.log('Renderizando NavigationContainer...');
+  // Se não há usuário logado, mostrar tela de autenticação
+  if (!usuarioLogado) {
+    console.log('🔐 Usuário não logado, mostrando AuthStackNavigator...');
+    return (
+      <NavigationContainer>
+        <StatusBar style="dark" />
+        <AuthStackNavigator />
+      </NavigationContainer>
+    );
+  }
+
+  console.log('✅ Usuário logado, renderizando NavigationContainer com MainNavigator...');
   return (
     <NavigationContainer>
       <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {/* Sempre mostrar interface principal primeiro */}
         <Stack.Screen name="Main" component={MainNavigator} />
         <Stack.Screen 
           name="Auth" 
           component={AuthStackNavigator}
           options={{ presentation: 'modal' }}
         />
+        {/* Telas específicas do entregador */}
+        <Stack.Screen name="DeliveryTripDetails" component={DeliveryTripDetailsScreen} />
+        <Stack.Screen name="DeliveryRoute" component={DeliveryRouteScreen} />
+        <Stack.Screen name="DeliveryHistory" component={DeliveryHistoryScreen} />
+        <Stack.Screen name="DeliveryCompletion" component={DeliveryCompletionScreen} />
+        <Stack.Screen name="DeliveryWallet" component={DeliveryWalletScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

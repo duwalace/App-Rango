@@ -69,6 +69,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = (userData: User, role?: UserRole) => {
+    console.log('=== LOGIN CHAMADO ===');
+    console.log('User:', userData.email);
+    console.log('Role:', role);
     setUsuarioLogado(userData);
     setUserRole(role || 'cliente');
   };
@@ -77,24 +80,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log('=== AUTHCONTEXT: INICIANDO LOGOUT ===');
     console.log('Estado atual - usuarioLogado:', usuarioLogado?.email);
     console.log('Estado atual - userRole:', userRole);
+    console.log('Auth object:', auth);
+    console.log('Auth currentUser:', auth.currentUser?.email);
     
     try {
       console.log('Chamando signOut do Firebase...');
       await signOut(auth);
       console.log('✅ signOut do Firebase concluído');
       
-      console.log('Limpando estado local...');
-      setUsuarioLogado(null);
-      setUserRole(null);
-      console.log('✅ Estado local limpo');
-      
+      // O onAuthStateChanged vai limpar o estado automaticamente
       console.log('✅ LOGOUT REALIZADO COM SUCESSO!');
       console.log('onAuthStateChanged deve ser disparado automaticamente');
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ ERRO NO LOGOUT (AuthContext):', error);
       console.error('Tipo do erro:', typeof error);
-      console.error('Mensagem:', error.message);
-      console.error('Código:', error.code);
+      console.error('Mensagem:', error?.message || 'Erro desconhecido');
+      console.error('Código:', error?.code || 'Código não disponível');
+      console.error('Stack:', error?.stack || 'Stack não disponível');
+      
+      // Em caso de erro, limpar estado manualmente
+      console.log('Limpando estado manualmente devido ao erro...');
+      setUsuarioLogado(null);
+      setUserRole(null);
+      
       throw error;
     }
   };

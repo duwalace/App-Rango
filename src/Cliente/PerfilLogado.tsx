@@ -1,47 +1,70 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
 const PerfilLogadoScreen = () => {
   const { usuarioLogado, logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     console.log('=== PERFIL LOGADO: INÍCIO DO PROCESSO DE LOGOUT ===');
     console.log('Usuário logado:', usuarioLogado?.email);
+    console.log('Platform:', Platform.OS);
     
-    Alert.alert(
-      'Sair da conta',
-      'Tem certeza que deseja sair da sua conta?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-          onPress: () => {
-            console.log('Logout cancelado pelo usuário');
-          }
-        },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('Usuário confirmou logout, iniciando processo...');
-            try {
-              console.log('Chamando função logout do AuthContext...');
-              await logout();
-              console.log('✅ Logout realizado com sucesso!');
-              console.log('Usuário deve ser redirecionado para tela inicial');
-            } catch (error) {
-              console.error('❌ ERRO NO LOGOUT:', error);
-              console.error('Detalhes do erro:', error.message);
-              console.error('Stack trace:', error.stack);
-              Alert.alert('Erro', 'Não foi possível fazer logout. Tente novamente.');
+    // Para web, usar confirm do browser como fallback
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Tem certeza que deseja sair da sua conta?');
+      if (confirmed) {
+        await performLogout();
+      } else {
+        console.log('Logout cancelado pelo usuário (web)');
+      }
+    } else {
+      // Para mobile, usar Alert.alert
+      Alert.alert(
+        'Sair da conta',
+        'Tem certeza que deseja sair da sua conta?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+            onPress: () => {
+              console.log('Logout cancelado pelo usuário (mobile)');
             }
           },
-        },
-      ]
-    );
+          {
+            text: 'Sair',
+            style: 'destructive',
+            onPress: performLogout,
+          },
+        ]
+      );
+    }
+  };
+
+  const performLogout = async () => {
+    console.log('Usuário confirmou logout, iniciando processo...');
+    setIsLoggingOut(true);
+    
+    try {
+      console.log('Chamando função logout do AuthContext...');
+      await logout();
+      console.log('✅ Logout realizado com sucesso!');
+      console.log('Usuário deve ser redirecionado para tela inicial');
+    } catch (error: any) {
+      console.error('❌ ERRO NO LOGOUT:', error);
+      console.error('Detalhes do erro:', error?.message || 'Erro desconhecido');
+      
+      if (Platform.OS === 'web') {
+        window.alert('Não foi possível fazer logout. Tente novamente.');
+      } else {
+        Alert.alert('Erro', 'Não foi possível fazer logout. Tente novamente.');
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const menuItems = [
@@ -65,7 +88,7 @@ const PerfilLogadoScreen = () => {
           </View>
           <View style={styles.userInfo}>
             <Text style={styles.userName}>Olá!</Text>
-            <Text style={styles.userEmail}>{usuarioLogado?.email}</Text>
+            <Text style={styles.userEmail}>{usuarioLogado?.email || 'Usuário'}</Text>
           </View>
         </View>
 
@@ -88,9 +111,20 @@ const PerfilLogadoScreen = () => {
 
         {/* Botão de Sair */}
         <View style={styles.logoutContainer}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={24} color="#EA1D2C" />
-            <Text style={styles.logoutText}>Sair da conta</Text>
+          <TouchableOpacity 
+            style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]} 
+            onPress={handleLogout}
+            activeOpacity={0.7}
+            disabled={isLoggingOut}
+          >
+            <Ionicons 
+              name={isLoggingOut ? "hourglass-outline" : "log-out-outline"} 
+              size={24} 
+              color={isLoggingOut ? "#999" : "#EA1D2C"} 
+            />
+            <Text style={[styles.logoutText, isLoggingOut && styles.logoutTextDisabled]}>
+              {isLoggingOut ? 'Saindo...' : 'Sair da conta'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -167,11 +201,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
   logoutText: {
     fontSize: 16,
     color: '#EA1D2C',
     marginLeft: 16,
     fontWeight: '500',
+  },
+  logoutTextDisabled: {
+    color: '#999',
   },
 });
 

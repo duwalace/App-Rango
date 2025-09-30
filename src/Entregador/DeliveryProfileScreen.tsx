@@ -1,124 +1,276 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity,
+  FlatList,
+  Alert,
+  Image
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 
-const DeliveryProfileScreen = () => {
+interface ProfileMenuItem {
+  id: string;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  action: string;
+  showArrow?: boolean;
+}
+
+const DeliveryProfileScreen: React.FC = () => {
+  const navigation = useNavigation();
   const { usuarioLogado, logout } = useAuth();
+  
+  // Dados simulados do perfil do entregador
+  const [profileData] = useState({
+    name: 'Carlos Entregador Silva',
+    deliveryId: 'ENT-2025-001',
+    photo: null, // URL da foto ou null para placeholder
+    rating: 4.9,
+    acceptanceRate: 85,
+    completionRate: 98,
+    totalDeliveries: 1247,
+    memberSince: 'Janeiro 2024'
+  });
+
+  // Itens do menu do perfil
+  const [menuItems] = useState<ProfileMenuItem[]>([
+    {
+      id: '1',
+      title: 'Meus Dados Pessoais',
+      icon: 'person-outline',
+      action: 'PersonalData',
+      showArrow: true
+    },
+    {
+      id: '2',
+      title: 'Informações do Veículo',
+      icon: 'bicycle-outline',
+      action: 'VehicleInfo',
+      showArrow: true
+    },
+    {
+      id: '3',
+      title: 'Meus Documentos',
+      icon: 'document-text-outline',
+      action: 'Documents',
+      showArrow: true
+    },
+    {
+      id: '4',
+      title: 'Central de Ajuda',
+      icon: 'help-circle-outline',
+      action: 'HelpCenter',
+      showArrow: true
+    },
+    {
+      id: '5',
+      title: 'Configurações do App',
+      icon: 'settings-outline',
+      action: 'AppSettings',
+      showArrow: true
+    },
+    {
+      id: '6',
+      title: 'Sair',
+      icon: 'log-out-outline',
+      action: 'Logout',
+      showArrow: false
+    }
+  ]);
 
   const handleLogout = () => {
-    console.log('=== INÍCIO DO PROCESSO DE LOGOUT ===');
-    console.log('Usuário logado:', usuarioLogado?.email);
-    
     Alert.alert(
-      'Sair da conta',
-      'Tem certeza que deseja sair da sua conta de entregador?',
+      'Sair da Conta',
+      'Tem certeza que deseja sair da sua conta?',
       [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-          onPress: () => {
-            console.log('Logout cancelado pelo usuário');
-          }
-        },
-        {
-          text: 'Sair',
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Sair', 
           style: 'destructive',
           onPress: async () => {
-            console.log('Usuário confirmou logout, iniciando processo...');
             try {
-              console.log('Chamando função logout do AuthContext...');
               await logout();
-              console.log('✅ Logout realizado com sucesso!');
-              console.log('Usuário deve ser redirecionado para tela de autenticação');
+              console.log('Logout realizado com sucesso');
             } catch (error) {
-              console.error('❌ ERRO NO LOGOUT:', error);
-              console.error('Detalhes do erro:', error.message);
-              console.error('Stack trace:', error.stack);
-              Alert.alert('Erro', 'Não foi possível fazer logout. Tente novamente.');
+              console.error('Erro no logout:', error);
+              Alert.alert('Erro', 'Não foi possível sair da conta. Tente novamente.');
             }
-          },
-        },
+          }
+        }
       ]
     );
   };
 
-  const menuItems = [
-    { icon: 'person-outline', title: 'Dados pessoais', onPress: () => console.log('Dados pessoais') },
-    { icon: 'bicycle-outline', title: 'Dados do veículo', onPress: () => console.log('Dados do veículo') },
-    { icon: 'document-text-outline', title: 'Documentos', onPress: () => console.log('Documentos') },
-    { icon: 'card-outline', title: 'Dados bancários', onPress: () => console.log('Dados bancários') },
-    { icon: 'notifications-outline', title: 'Notificações', onPress: () => console.log('Notificações') },
-    { icon: 'time-outline', title: 'Histórico de trabalho', onPress: () => console.log('Histórico') },
-    { icon: 'help-circle-outline', title: 'Ajuda', onPress: () => console.log('Ajuda') },
-    { icon: 'information-circle-outline', title: 'Sobre', onPress: () => console.log('Sobre') },
-  ];
+  const MapsTo = (destination: string) => {
+    console.log('Navegar para:', destination);
+    
+    switch (destination) {
+      case 'PersonalData':
+        navigation.navigate('DeliveryPersonalData' as never);
+        break;
+      case 'VehicleInfo':
+        navigation.navigate('DeliveryVehicleInfo' as never);
+        break;
+      case 'Documents':
+        navigation.navigate('DeliveryDocuments' as never);
+        break;
+      case 'HelpCenter':
+        navigation.navigate('DeliveryHelpCenter' as never);
+        break;
+      case 'AppSettings':
+        navigation.navigate('DeliveryAppSettings' as never);
+        break;
+      case 'Logout':
+        handleLogout();
+        break;
+      default:
+        Alert.alert('Em Desenvolvimento', 'Esta funcionalidade estará disponível em breve.');
+    }
+  };
+
+  const renderStarRating = (rating: number) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(
+        <Ionicons key={i} name="star" size={16} color="#FFD700" />
+      );
+    }
+    
+    if (hasHalfStar) {
+      stars.push(
+        <Ionicons key="half" name="star-half" size={16} color="#FFD700" />
+      );
+    }
+    
+    const emptyStars = 5 - Math.ceil(rating);
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(
+        <Ionicons key={`empty-${i}`} name="star-outline" size={16} color="#FFD700" />
+      );
+    }
+    
+    return stars;
+  };
+
+  const renderMenuItem = ({ item }: { item: ProfileMenuItem }) => (
+    <TouchableOpacity 
+      style={[
+        styles.menuItem,
+        item.action === 'Logout' && styles.logoutMenuItem
+      ]}
+      onPress={() => MapsTo(item.action)}
+    >
+      <View style={styles.menuItemLeft}>
+        <Ionicons 
+          name={item.icon} 
+          size={24} 
+          color={item.action === 'Logout' ? '#FF5722' : '#666'} 
+        />
+        <Text style={[
+          styles.menuItemText,
+          item.action === 'Logout' && styles.logoutMenuItemText
+        ]}>
+          {item.title}
+        </Text>
+      </View>
+      
+      {item.showArrow && (
+        <Ionicons name="chevron-forward" size={16} color="#999" />
+      )}
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header do Perfil */}
-        <View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Ionicons name="bicycle" size={40} color="#EA1D2C" />
-            </View>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>Entregador</Text>
-            </View>
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>Olá, Entregador!</Text>
-            <Text style={styles.userEmail}>{usuarioLogado?.email}</Text>
-            <View style={styles.ratingContainer}>
-              <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.ratingText}>4.9 • 234 entregas</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Estatísticas Rápidas */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>R$ 1.234,50</Text>
-            <Text style={styles.statLabel}>Este mês</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>4.9</Text>
-            <Text style={styles.statLabel}>Avaliação</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>98%</Text>
-            <Text style={styles.statLabel}>Aceitação</Text>
-          </View>
-        </View>
-
-        {/* Menu de Opções */}
-        <View style={styles.menuContainer}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              onPress={item.onPress}
-            >
-              <View style={styles.menuItemLeft}>
-                <Ionicons name={item.icon as any} size={24} color="#666" />
-                <Text style={styles.menuItemText}>{item.title}</Text>
+      <FlatList
+        data={menuItems}
+        renderItem={renderMenuItem}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View>
+            {/* Header do Perfil */}
+            <View style={styles.profileHeader}>
+              <View style={styles.photoContainer}>
+                {profileData.photo ? (
+                  <Image source={{ uri: profileData.photo }} style={styles.profilePhoto} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <Ionicons name="person" size={40} color="#999" />
+                  </View>
+                )}
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
-          ))}
-        </View>
+              
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>{profileData.name}</Text>
+                <Text style={styles.deliveryId}>ID: {profileData.deliveryId}</Text>
+                <Text style={styles.memberSince}>Membro desde {profileData.memberSince}</Text>
+              </View>
+            </View>
 
-        {/* Botão de Sair */}
-        <View style={styles.logoutContainer}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={24} color="#EA1D2C" />
-            <Text style={styles.logoutText}>Sair da conta</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+            {/* Métricas de Desempenho */}
+            <View style={styles.metricsContainer}>
+              <Text style={styles.metricsTitle}>Desempenho</Text>
+              
+              <View style={styles.metricsGrid}>
+                {/* Nota de Avaliação */}
+                <View style={styles.metricCard}>
+                  <View style={styles.metricHeader}>
+                    <Ionicons name="star" size={20} color="#FFD700" />
+                    <Text style={styles.metricLabel}>Avaliação</Text>
+                  </View>
+                  <Text style={styles.metricValue}>{profileData.rating.toFixed(1)}/5</Text>
+                  <View style={styles.starsContainer}>
+                    {renderStarRating(profileData.rating)}
+                  </View>
+                </View>
+
+                {/* Taxa de Aceitação */}
+                <View style={styles.metricCard}>
+                  <View style={styles.metricHeader}>
+                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Text style={styles.metricLabel}>Aceitação</Text>
+                  </View>
+                  <Text style={styles.metricValue}>{profileData.acceptanceRate}%</Text>
+                  <Text style={styles.metricSubtext}>Taxa de aceitação</Text>
+                </View>
+
+                {/* Taxa de Conclusão */}
+                <View style={styles.metricCard}>
+                  <View style={styles.metricHeader}>
+                    <Ionicons name="trophy" size={20} color="#FF9800" />
+                    <Text style={styles.metricLabel}>Conclusão</Text>
+                  </View>
+                  <Text style={styles.metricValue}>{profileData.completionRate}%</Text>
+                  <Text style={styles.metricSubtext}>Taxa de conclusão</Text>
+                </View>
+
+                {/* Total de Entregas */}
+                <View style={styles.metricCard}>
+                  <View style={styles.metricHeader}>
+                    <Ionicons name="bicycle" size={20} color="#2196F3" />
+                    <Text style={styles.metricLabel}>Entregas</Text>
+                  </View>
+                  <Text style={styles.metricValue}>{profileData.totalDeliveries.toLocaleString()}</Text>
+                  <Text style={styles.metricSubtext}>Total realizadas</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Título da Lista de Opções */}
+            <Text style={styles.menuTitle}>Configurações</Text>
+          </View>
+        }
+        contentContainerStyle={styles.scrollContent}
+      />
     </SafeAreaView>
   );
 };
@@ -126,132 +278,138 @@ const DeliveryProfileScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
+    backgroundColor: '#F8F9FA',
   },
-  scrollView: {
-    flex: 1,
+  scrollContent: {
+    paddingBottom: 20,
   },
-  header: {
-    backgroundColor: 'white',
-    padding: 24,
+  profileHeader: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
   },
-  avatarContainer: {
-    marginRight: 16,
-    position: 'relative',
+  photoContainer: {
+    marginRight: 15,
   },
-  avatar: {
+  profilePhoto: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FFF5F5',
+  },
+  photoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F0F0F0',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#EA1D2C',
   },
-  statusBadge: {
-    position: 'absolute',
-    bottom: -5,
-    right: -5,
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  statusText: {
-    fontSize: 10,
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  userInfo: {
+  profileInfo: {
     flex: 1,
   },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  profileName: {
+    fontSize: 20,
+    fontWeight: '700',
     color: '#333',
     marginBottom: 4,
   },
-  userEmail: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
+  deliveryId: {
     fontSize: 14,
     color: '#666',
-    marginLeft: 4,
+    marginBottom: 2,
   },
-  statsContainer: {
+  memberSince: {
+    fontSize: 12,
+    color: '#999',
+  },
+  metricsContainer: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    marginTop: 10,
+  },
+  metricsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 15,
+  },
+  metricsGrid: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: 'white',
-    padding: 16,
+  metricCard: {
+    width: '48%',
+    backgroundColor: '#F8F9FA',
     borderRadius: 12,
+    padding: 15,
+    marginBottom: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  metricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 5,
+    fontWeight: '500',
+  },
+  metricValue: {
+    fontSize: 24,
+    fontWeight: '700',
     color: '#333',
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
+  metricSubtext: {
+    fontSize: 10,
+    color: '#999',
+    textAlign: 'center',
   },
-  menuContainer: {
-    backgroundColor: 'white',
-    marginBottom: 16,
+  starsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 15,
+    paddingHorizontal: 20,
   },
   menuItem: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F0F0F0',
+  },
+  logoutMenuItem: {
+    borderBottomWidth: 0,
+    marginTop: 10,
   },
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   menuItemText: {
     fontSize: 16,
     color: '#333',
-    marginLeft: 16,
-  },
-  logoutContainer: {
-    backgroundColor: 'white',
-    marginBottom: 32,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-  },
-  logoutText: {
-    fontSize: 16,
-    color: '#EA1D2C',
-    marginLeft: 16,
+    marginLeft: 15,
     fontWeight: '500',
+  },
+  logoutMenuItemText: {
+    color: '#FF5722',
   },
 });
 

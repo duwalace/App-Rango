@@ -26,11 +26,22 @@ const DeliveryLoginScreen: React.FC = () => {
   const isFormValid = email.trim() !== '' && password.trim() !== '';
 
   const handleLogin = async () => {
+    if (!isFormValid) {
+      setError('Por favor, preencha todos os campos.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
+      console.log('🔐 Tentando fazer login com:', email);
+      
       const { user, role } = await signIn(email, password);
+      
+      console.log('✅ Login realizado com sucesso!');
+      console.log('👤 Usuário:', user.email);
+      console.log('🎭 Role:', role);
       
       // Verificar se o usuário é realmente um entregador
       if (role !== 'entregador') {
@@ -39,17 +50,34 @@ const DeliveryLoginScreen: React.FC = () => {
         return;
       }
       
-      console.log('Login de entregador bem-sucedido!', user.uid, 'Papel:', role);
+      console.log('✅ Usuário é entregador, fazendo login...');
       
-      // Avisar o app que o usuário entrou
+      // Avisar o AuthContext que o usuário entrou
       login(user, role);
       
-      // Fechar o modal de autenticação e voltar para a tela principal
-      navigation.navigate('Main' as never);
+      console.log('🚀 Login concluído! O sistema vai redirecionar automaticamente...');
+      
+      // Não fazer navegação manual - deixar o RootNavigator detectar a mudança
+      // de userRole e redirecionar automaticamente para a interface do entregador
       
     } catch (error: any) {
-      console.error('Erro no login:', error);
-      setError(error.message || 'Erro ao fazer login. Tente novamente.');
+      console.error('❌ Erro no login:', error);
+      
+      let errorMessage = 'Erro ao fazer login. Tente novamente.';
+      
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Usuário não encontrado. Verifique o e-mail.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Senha incorreta. Tente novamente.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'E-mail inválido. Verifique o formato.';
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'Credenciais inválidas. Verifique e-mail e senha.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -60,8 +88,17 @@ const DeliveryLoginScreen: React.FC = () => {
   };
 
   const handleForgotPassword = () => {
-    console.log('Esqueci minha senha - Entregador');
-    // Implementar navegação para tela de recuperação de senha
+    Alert.alert(
+      'Recuperar senha',
+      'Funcionalidade em desenvolvimento. Entre em contato com o suporte.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  // Função para preencher dados de teste
+  const fillTestData = () => {
+    setEmail('carlos.entregador@teste.com');
+    setPassword('teste123');
   };
 
   return (
@@ -98,6 +135,7 @@ const DeliveryLoginScreen: React.FC = () => {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
               
               <FormInput
@@ -124,6 +162,13 @@ const DeliveryLoginScreen: React.FC = () => {
               <SecondaryLink
                 text="Não tem conta? Cadastre-se aqui"
                 onPress={handleGoToSignup}
+                align="center"
+              />
+              
+              {/* Botão de teste - remover em produção */}
+              <SecondaryLink
+                text="🧪 Preencher dados de teste"
+                onPress={fillTestData}
                 align="center"
               />
             </View>
