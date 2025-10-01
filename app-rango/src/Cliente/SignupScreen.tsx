@@ -15,7 +15,6 @@ import SecondaryLink from '../components/SecondaryLink';
 
 const SignupScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { login } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,11 +40,11 @@ const SignupScreen: React.FC = () => {
       const { user, role } = await signUp(fullName, email, password, 'cliente');
       console.log('Cadastro bem-sucedido!', user.uid, 'Papel:', role);
       
-      // Fazer login automático após cadastro
-      login(user, role);
+      // O Firebase Auth vai disparar onAuthStateChanged automaticamente
+      // e o AuthContext vai atualizar o estado, não precisa fazer login manual
       
-      // Fechar o modal de autenticação e voltar para a tela principal
-      navigation.navigate('Main' as never);
+      // A navegação será feita automaticamente quando o AuthContext atualizar
+      console.log('✅ Cadastro concluído, aguardando onAuthStateChanged...');
       
     } catch (err: any) {
       // Trata os erros comuns de cadastro do Firebase

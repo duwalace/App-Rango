@@ -6,7 +6,6 @@ import { useNavigation } from '@react-navigation/native';
 // import { CommonActions } from '@react-navigation/native';
 
 import { signIn } from '../services/authService';
-import { useAuth } from '../contexts/AuthContext'; // <--- MUDANÇA 1: Importe o useAuth
 
 import AuthHeader from '../components/AuthHeader';
 import FormInput from '../components/FormInput';
@@ -15,7 +14,6 @@ import SecondaryLink from '../components/SecondaryLink';
 
 const LoginScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { login } = useAuth(); // <--- MUDANÇA 2: Pegue a função 'login' do contexto
 
   // Estados do formulário
   const [email, setEmail] = useState('');
@@ -35,11 +33,11 @@ const LoginScreen: React.FC = () => {
       const { user, role } = await signIn(email, password);
       console.log('Login bem-sucedido!', user.uid, 'Papel:', role);
       
-      // AVISAR O APP QUE O USUÁRIO ENTROU!
-      login(user, role);
+      // O Firebase Auth vai disparar onAuthStateChanged automaticamente
+      // e o AuthContext vai atualizar o estado, não precisa fazer login manual
       
-      // Fechar o modal de autenticação e voltar para a tela principal
-      navigation.navigate('Main' as never);
+      // A navegação será feita automaticamente quando o AuthContext atualizar
+      console.log('✅ Login concluído, aguardando onAuthStateChanged...');
       
     } catch (err: any) {
       // Seu tratamento de erro (que já está ótimo)

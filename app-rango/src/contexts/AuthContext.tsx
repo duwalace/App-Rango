@@ -12,6 +12,9 @@ interface AppUser extends User {
 interface AuthContextType {
   // Unificando usuarioLogado e userRole para maior consistência
   currentUser: AppUser | null;
+  // Mantendo compatibilidade com código antigo
+  usuarioLogado: AppUser | null;
+  userRole: UserRole | undefined;
   loading: boolean;
   logout: () => Promise<void>;
 }
@@ -98,7 +101,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const value = { currentUser, loading, logout };
+  const value = { 
+    currentUser, 
+    usuarioLogado: currentUser, // Alias para compatibilidade
+    userRole: currentUser?.role, // Extrair role para acesso direto
+    loading, 
+    logout 
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
