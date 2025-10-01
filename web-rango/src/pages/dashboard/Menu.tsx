@@ -133,7 +133,8 @@ export default function Menu() {
         name: categoryForm.name.trim(),
         description: categoryForm.description.trim(),
         storeId: user.storeId,
-        isActive: categoryForm.isActive
+        isActive: categoryForm.isActive,
+        order: categories.length // Define a ordem baseada na quantidade atual
       };
 
       await createCategory(categoryData);
@@ -231,7 +232,9 @@ export default function Menu() {
         storeId: user.storeId,
         image: itemForm.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop',
         isAvailable: itemForm.isAvailable,
-        preparationTime: itemForm.preparationTime
+        isPopular: false,
+        preparationTime: parseInt(itemForm.preparationTime) || 20, // Converte para número
+        order: menuItems.length // Define a ordem baseada na quantidade atual
       };
 
       await createMenuItem(itemData);
@@ -269,10 +272,9 @@ export default function Menu() {
         name: itemForm.name.trim(),
         description: itemForm.description.trim(),
         price: parseFloat(itemForm.price),
-        categoryId: itemForm.categoryId,
         image: itemForm.image,
         isAvailable: itemForm.isAvailable,
-        preparationTime: itemForm.preparationTime
+        preparationTime: parseInt(itemForm.preparationTime) || 20 // Converte para número
       });
 
       toast({
@@ -338,7 +340,7 @@ export default function Menu() {
       categoryId: item.categoryId,
       image: item.image,
       isAvailable: item.isAvailable,
-      preparationTime: item.preparationTime
+      preparationTime: item.preparationTime.toString()
     });
     setShowItemModal(true);
   };
