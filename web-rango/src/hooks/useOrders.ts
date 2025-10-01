@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Order, OrderStatus } from '@/types/shared';
 import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  updateDoc, 
-  doc 
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Order } from '@/types/store';
+  subscribeToStoreOrders, 
+  updateOrderStatus as updateOrderStatusService,
+  getOrderById
+} from '@/services/orderService';
 
 export const useOrders = (storeId: string) => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -17,65 +12,94 @@ export const useOrders = (storeId: string) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!storeId) return;
-
-    const ordersRef = collection(db, 'orders');
-    const q = query(
-      ordersRef,
-      where('storeId', '==', storeId),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const ordersData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Order[];
-      
-      setOrders(ordersData);
-      setError(null);
+    if (!storeId) {
       setLoading(false);
-    }, (error) => {
-      console.error('Erro ao buscar pedidos:', error);
-      setError('Erro ao carregar pedidos');
+      return;
+    }
+
+    console.log('🔵 Inscrevendo-se nos pedidos da loja:', storeId);
+
+    const unsubscribe = subscribeToStoreOrders(storeId, (ordersData) => {
+      console.log('✅ Pedidos recebidos:', ordersData.length);
+      setOrders(ordersData);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      console.log('🔴 Cancelando inscrição nos pedidos');
+      unsubscribe();
+    };
   }, [storeId]);
 
-  const updateOrderStatus = async (orderId: string, status: Order['status']) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     try {
-      const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
-        status,
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Erro ao atualizar status do pedido:', error);
-      throw error;
+      console.log('🔵 Atualizando status do pedido:', orderId, 'para', status);
+      await updateOrderStatusService(orderId, status);
+      console.log('✅ Status atualizado com sucesso');
+      return true;
+    } catch (err) {
+      console.error('❌ Erro ao atualizar status:', err);
+      setError('Erro ao atualizar status do pedido');
+      return false;
     }
   };
 
-  const getOrdersByStatus = (status: Order['status']) => {
+  const getOrdersByStatus = (status: OrderStatus | 'all') => {
+    if (status === 'all') return orders;
     return orders.filter(order => order.status === status);
   };
 
   const getTodayOrders = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
     return orders.filter(order => {
-      const orderDate = new Date(order.createdAt);
+      const orderDate = order.createdAt instanceof Date 
+        ? order.createdAt 
+        : new Date(order.createdAt);
       return orderDate >= today;
     });
   };
 
-  return { 
-    orders, 
-    loading, 
-    error, 
-    updateOrderStatus, 
-    getOrdersByStatus, 
-    getTodayOrders 
+  const getPendingOrders = () => {
+    return orders.filter(order => order.status === 'pending');
+  };
+
+  const getActiveOrders = () => {
+    return orders.filter(order => 
+      ['pending', 'confirmed', 'preparing', 'ready', 'in_delivery'].includes(order.status)
+    );
+  };
+
+  const getCompletedOrders = () => {
+    return orders.filter(order => order.status === 'delivered');
+  };
+
+  const getCancelledOrders = () => {
+    return orders.filter(order => order.status === 'cancelled');
+  };
+
+  const getOrderDetails = async (orderId: string) => {
+    try {
+      const order = await getOrderById(orderId);
+      return order;
+    } catch (err) {
+      console.error('Erro ao buscar detalhes do pedido:', err);
+      return null;
+    }
+  };
+
+  return {
+    orders,
+    loading,
+    error,
+    updateOrderStatus,
+    getOrdersByStatus,
+    getTodayOrders,
+    getPendingOrders,
+    getActiveOrders,
+    getCompletedOrders,
+    getCancelledOrders,
+    getOrderDetails
   };
 };

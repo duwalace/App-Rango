@@ -1,179 +1,149 @@
 import { useState, useEffect } from 'react';
+import { MenuCategory, MenuItem } from '@/types/shared';
 import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  doc 
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { MenuCategory, MenuItem } from '@/types/store';
+  subscribeToStoreCategories,
+  subscribeToStoreMenuItems,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  createMenuItem,
+  updateMenuItem,
+  deleteMenuItem
+} from '@/services/menuService';
 
-export const useMenuCategories = (storeId: string) => {
+export const useMenu = (storeId: string) => {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!storeId) return;
-
-    const categoriesRef = collection(db, 'menuCategories');
-    const q = query(
-      categoriesRef,
-      where('storeId', '==', storeId),
-      orderBy('order', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const categoriesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as MenuCategory[];
-      
-      setCategories(categoriesData);
-      setError(null);
+    if (!storeId) {
       setLoading(false);
-    }, (error) => {
-      console.error('Erro ao buscar categorias:', error);
-      setError('Erro ao carregar categorias');
+      return;
+    }
+
+    console.log('🔵 Carregando menu da loja:', storeId);
+
+    // Inscrever-se nas categorias
+    const unsubscribeCategories = subscribeToStoreCategories(storeId, (categoriesData) => {
+      console.log('✅ Categorias recebidas:', categoriesData.length);
+      setCategories(categoriesData);
+    });
+
+    // Inscrever-se nos itens do menu
+    const unsubscribeItems = subscribeToStoreMenuItems(storeId, (itemsData) => {
+      console.log('✅ Itens do menu recebidos:', itemsData.length);
+      setMenuItems(itemsData);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      console.log('🔴 Cancelando inscrições do menu');
+      unsubscribeCategories();
+      unsubscribeItems();
+    };
   }, [storeId]);
 
-  const addCategory = async (category: Omit<MenuCategory, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // Funções para categorias
+  const addCategory = async (categoryData: any) => {
     try {
-      await addDoc(collection(db, 'menuCategories'), {
-        ...category,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Erro ao adicionar categoria:', error);
-      throw error;
+      await createCategory(categoryData);
+      return true;
+    } catch (err) {
+      console.error('Erro ao criar categoria:', err);
+      setError('Erro ao criar categoria');
+      throw err;
     }
   };
 
-  const updateCategory = async (categoryId: string, updates: Partial<MenuCategory>) => {
+  const editCategory = async (categoryId: string, categoryData: any) => {
     try {
-      const categoryRef = doc(db, 'menuCategories', categoryId);
-      await updateDoc(categoryRef, {
-        ...updates,
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Erro ao atualizar categoria:', error);
-      throw error;
+      await updateCategory(categoryId, categoryData);
+      return true;
+    } catch (err) {
+      console.error('Erro ao atualizar categoria:', err);
+      setError('Erro ao atualizar categoria');
+      throw err;
     }
   };
 
-  const deleteCategory = async (categoryId: string) => {
+  const removeCategory = async (categoryId: string) => {
     try {
-      await deleteDoc(doc(db, 'menuCategories', categoryId));
-    } catch (error) {
-      console.error('Erro ao deletar categoria:', error);
-      throw error;
+      await deleteCategory(categoryId);
+      return true;
+    } catch (err) {
+      console.error('Erro ao excluir categoria:', err);
+      setError('Erro ao excluir categoria');
+      throw err;
     }
   };
 
-  return { 
-    categories, 
-    loading, 
-    error, 
-    addCategory, 
-    updateCategory, 
-    deleteCategory 
-  };
-};
-
-export const useMenuItems = (storeId: string, categoryId?: string) => {
-  const [items, setItems] = useState<MenuItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!storeId) return;
-
-    const itemsRef = collection(db, 'menuItems');
-    let q = query(
-      itemsRef,
-      where('storeId', '==', storeId),
-      orderBy('order', 'asc')
-    );
-
-    if (categoryId) {
-      q = query(
-        itemsRef,
-        where('storeId', '==', storeId),
-        where('categoryId', '==', categoryId),
-        orderBy('order', 'asc')
-      );
-    }
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const itemsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as MenuItem[];
-      
-      setItems(itemsData);
-      setError(null);
-      setLoading(false);
-    }, (error) => {
-      console.error('Erro ao buscar itens do cardápio:', error);
-      setError('Erro ao carregar itens do cardápio');
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [storeId, categoryId]);
-
-  const addMenuItem = async (item: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // Funções para itens
+  const addMenuItem = async (itemData: any) => {
     try {
-      await addDoc(collection(db, 'menuItems'), {
-        ...item,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Erro ao adicionar item:', error);
-      throw error;
+      await createMenuItem(itemData);
+      return true;
+    } catch (err) {
+      console.error('Erro ao criar item:', err);
+      setError('Erro ao criar item');
+      throw err;
     }
   };
 
-  const updateMenuItem = async (itemId: string, updates: Partial<MenuItem>) => {
+  const editMenuItem = async (itemId: string, itemData: any) => {
     try {
-      const itemRef = doc(db, 'menuItems', itemId);
-      await updateDoc(itemRef, {
-        ...updates,
-        updatedAt: new Date()
-      });
-    } catch (error) {
-      console.error('Erro ao atualizar item:', error);
-      throw error;
+      await updateMenuItem(itemId, itemData);
+      return true;
+    } catch (err) {
+      console.error('Erro ao atualizar item:', err);
+      setError('Erro ao atualizar item');
+      throw err;
     }
   };
 
-  const deleteMenuItem = async (itemId: string) => {
+  const removeMenuItem = async (itemId: string) => {
     try {
-      await deleteDoc(doc(db, 'menuItems', itemId));
-    } catch (error) {
-      console.error('Erro ao deletar item:', error);
-      throw error;
+      await deleteMenuItem(itemId);
+      return true;
+    } catch (err) {
+      console.error('Erro ao excluir item:', err);
+      setError('Erro ao excluir item');
+      throw err;
     }
   };
 
-  return { 
-    items, 
-    loading, 
-    error, 
-    addMenuItem, 
-    updateMenuItem, 
-    deleteMenuItem 
+  // Funções auxiliares
+  const getCategoryById = (categoryId: string) => {
+    return categories.find(cat => cat.id === categoryId);
+  };
+
+  const getItemsByCategory = (categoryId: string) => {
+    return menuItems.filter(item => item.categoryId === categoryId);
+  };
+
+  const getAvailableItems = () => {
+    return menuItems.filter(item => item.isAvailable);
+  };
+
+  const getActiveCategories = () => {
+    return categories.filter(cat => cat.isActive);
+  };
+
+  return {
+    categories,
+    menuItems,
+    loading,
+    error,
+    addCategory,
+    editCategory,
+    removeCategory,
+    addMenuItem,
+    editMenuItem,
+    removeMenuItem,
+    getCategoryById,
+    getItemsByCategory,
+    getAvailableItems,
+    getActiveCategories
   };
 };

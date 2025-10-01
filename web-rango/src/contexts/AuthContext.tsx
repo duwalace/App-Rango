@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
 interface StoreOwner extends User {
-  role: 'store_owner';
+  role: 'dono_da_loja' | 'store_owner';
   storeId?: string;
   storeName?: string;
 }
@@ -30,19 +30,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            if (userData.role === 'store_owner') {
+            console.log('📋 Dados do usuário encontrados:', userData);
+            
+            if (userData.role === 'dono_da_loja' || userData.role === 'store_owner') {
               setUser({
                 ...firebaseUser,
-                role: 'store_owner',
+                role: userData.role,
                 storeId: userData.storeId,
                 storeName: userData.storeName
               });
+              console.log('✅ Usuário logado com sucesso');
             } else {
+              console.log('❌ Usuário não é dono de loja. Role:', userData.role);
               // Usuário não é dono de loja
               await signOut(auth);
               setUser(null);
             }
           } else {
+            console.log('❌ Documento do usuário não encontrado');
             await signOut(auth);
             setUser(null);
           }

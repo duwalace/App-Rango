@@ -45,7 +45,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrders } from "@/hooks/useOrders";
 import { useToast } from "@/hooks/use-toast";
-import { Order } from "@/types/store";
+import { Order, OrderStatus } from "@/types/shared";
 
 const Orders = () => {
   const { user } = useAuth();

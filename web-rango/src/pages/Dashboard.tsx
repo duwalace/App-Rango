@@ -1,10 +1,9 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
-import { PerformanceCards } from "@/components/PerformanceCards";
-import { MetricsSection } from "@/components/MetricsSection";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import Overview from "./dashboard/Overview";
 import Delivery from "./dashboard/Delivery";
 import Orders from "./dashboard/Orders";
 import Menu from "./dashboard/Menu";
@@ -46,20 +45,7 @@ const Dashboard = () => {
           
           <div className="flex-1 p-6">
             <Routes>
-              <Route index element={
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-semibold text-foreground">
-                      Olá, {user.storeName || 'Dono da Loja'}!
-                    </h1>
-                    <div className="text-sm text-muted-foreground">
-                      {user.storeId && `ID da Loja: ${user.storeId}`}
-                    </div>
-                  </div>
-                  <PerformanceCards />
-                  <MetricsSection />
-                </div>
-              } />
+              <Route index element={<Overview />} />
               <Route path="delivery" element={<Delivery />} />
               <Route path="orders" element={<Orders />} />
               <Route path="menu" element={<Menu />} />

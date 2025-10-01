@@ -27,12 +27,29 @@ const Login = () => {
 
     setLoading(true);
     try {
+      console.log('🔵 Tentando fazer login...');
       await login(email, password);
+      console.log('✅ Login realizado, redirecionando...');
       navigate("/dashboard");
     } catch (error: any) {
+      console.error('❌ Erro no login:', error);
+      
+      let errorMessage = 'Erro ao fazer login';
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Usuário não encontrado';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Senha incorreta';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Email inválido';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Muitas tentativas. Tente novamente mais tarde';
+      } else {
+        errorMessage = error.message || 'Erro desconhecido';
+      }
+      
       toast({
         title: "Erro no login",
-        description: error.message || "Erro ao fazer login",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -116,7 +133,10 @@ const Login = () => {
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
               Ainda não tem cadastro?{" "}
-              <button className="text-primary hover:underline font-medium">
+              <button 
+                onClick={() => navigate('/register')}
+                className="text-primary hover:underline font-medium"
+              >
                 Cadastre sua loja
               </button>
             </p>
