@@ -1,0 +1,30 @@
+# Dependency directories
+node_modules/
+yarn-error.log
+npm-debug.log
+
+# Expo files
+.expo/
+dist/
+.idea/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Environment variables
+.env
+
+# Build files
+*.apk
+*.ipa
+
+# Temporary files
+*.lock
+
+# Mac files
+.DS_Store
+
+# Jest
+coverage/

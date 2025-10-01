@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "App iFood",
+    "slug": "app-ifood",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#EA1D2C"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "statusBarStyle": "dark"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#EA1D2C"
+      },
+      "statusBar": {
+        "barStyle": "dark-content",
+        "backgroundColor": "transparent",
+        "translucent": true
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O app precisa acessar suas fotos para envio de documentos.",
+          "cameraPermission": "O app precisa acessar sua câmera para tirar fotos dos documentos."
+        }
+      ]
+    ]
+  }
+}
