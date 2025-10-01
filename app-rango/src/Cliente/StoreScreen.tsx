@@ -1,5 +1,5 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, Animated, SafeAreaView } from 'react-native';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { View, Text, FlatList, StyleSheet, Animated, SafeAreaView, ActivityIndicator } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { HomeStackParamList } from '../types/navigation';
@@ -10,8 +10,18 @@ import HighlightDishCard from '../components/HighlightDishCard';
 import MenuSectionHeader from '../components/MenuSectionHeader';
 import MenuItemCard from '../components/MenuItemCard';
 
-// Dados
-import { mockStore, mockHighlightDishes, mockMenuSections } from '../data/storeData';
+// Serviços
+import { 
+  subscribeToStoreCategories, 
+  subscribeToStoreMenuItems, 
+  getPopularItems,
+  formatPrice,
+  MenuCategory,
+  MenuItem 
+} from '../services/menuService';
+
+// Dados mock para fallback
+import { mockStore } from '../data/storeData';
 
 type StoreScreenRouteProp = RouteProp<{
   Store: { storeId: string };
@@ -27,15 +37,89 @@ type StoreScreenNavigationProp = StackNavigationProp<HomeStackParamList>;
 const StoreScreen: React.FC = () => {
   const route = useRoute<StoreScreenRouteProp>();
   const navigation = useNavigation<StoreScreenNavigationProp>();
-  const { storeId } = route.params || { storeId: '1' };
+  const { storeId } = route.params || { storeId: 'loja-pizzaria-do-joao' }; // ID padrão da pizzaria
   
   // Animated Value para controlar as animações
   const scrollY = useRef(new Animated.Value(0)).current;
   
-  // Estado da loja (normalmente viria de uma API)
+  // Estados
   const [store, setStore] = useState(mockStore);
-  const [highlightDishes] = useState(mockHighlightDishes);
-  const [menuSections] = useState(mockMenuSections);
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [highlightDishes, setHighlightDishes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
+
+  // Carregar dados do Firestore
+  useEffect(() => {
+    console.log('🔵 StoreScreen: Carregando dados da loja:', storeId);
+    setLoading(true);
+
+    // Inscrever-se nas categorias
+    const unsubscribeCategories = subscribeToStoreCategories(storeId, (categoriesData) => {
+      console.log('✅ StoreScreen: Categorias recebidas:', categoriesData.length);
+      setCategories(categoriesData);
+    });
+
+    // Inscrever-se nos itens do menu
+    const unsubscribeItems = subscribeToStoreMenuItems(storeId, (itemsData) => {
+      console.log('✅ StoreScreen: Itens recebidos:', itemsData.length);
+      setMenuItems(itemsData);
+      setLoading(false);
+    });
+
+    // Buscar itens populares para destaques
+    getPopularItems(storeId).then((popularItems) => {
+      console.log('✅ StoreScreen: Itens populares:', popularItems.length);
+      // Converter para formato do HighlightDishCard
+      const highlights = popularItems.map(item => ({
+        id: item.id,
+        name: item.name,
+        image: item.image,
+        price: formatPrice(item.price),
+        isBestSeller: item.isPopular,
+      }));
+      setHighlightDishes(highlights);
+    }).catch(error => {
+      console.error('❌ Erro ao buscar itens populares:', error);
+    });
+
+    return () => {
+      console.log('🔴 StoreScreen: Cancelando inscrições');
+      unsubscribeCategories();
+      unsubscribeItems();
+    };
+  }, [storeId]);
+
+  // Organizar itens por categoria
+  useEffect(() => {
+    if (categories.length > 0 && menuItems.length > 0) {
+      console.log('🔵 Organizando menu por categorias...');
+      
+      const sections: MenuSection[] = categories.map(category => {
+        const categoryItems = menuItems
+          .filter(item => item.categoryId === category.id)
+          .map(item => ({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            price: formatPrice(item.price),
+            image: item.image,
+            isPromotion: false,
+            isSpicy: false,
+            isVegetarian: false,
+          }));
+
+        return {
+          title: category.name,
+          data: categoryItems,
+        };
+      }).filter(section => section.data.length > 0); // Remover categorias vazias
+
+      console.log('✅ Seções organizadas:', sections.length);
+      setMenuSections(sections);
+    }
+  }, [categories, menuItems]);
 
   // Handlers
   const handleFavoritePress = useCallback(() => {
@@ -111,6 +195,36 @@ const StoreScreen: React.FC = () => {
     />
   );
 
+  // Mostrar loading enquanto carrega
+  if (loading && menuSections.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#EA1D2C" />
+          <Text style={styles.loadingText}>Carregando cardápio...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Mostrar mensagem se não houver itens
+  if (!loading && menuSections.length === 0) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StoreHeader
+          store={store}
+          animatedValue={scrollY}
+          onFavoritePress={handleFavoritePress}
+          onSearchPress={handleSearchPress}
+        />
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Nenhum item no cardápio ainda.</Text>
+          <Text style={styles.emptySubtext}>O restaurante ainda está adicionando produtos.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <Animated.SectionList
@@ -158,6 +272,34 @@ const styles = StyleSheet.create({
   },
   highlightsContainer: {
     paddingHorizontal: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
 });
 

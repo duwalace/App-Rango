@@ -3,9 +3,6 @@ import {
   doc, 
   getDoc, 
   getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc,
   query,
   where,
   orderBy,
@@ -13,14 +10,37 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { 
-  MenuCategory, 
-  MenuItem, 
-  CreateMenuCategoryData, 
-  UpdateMenuCategoryData,
-  CreateMenuItemData,
-  UpdateMenuItemData
-} from '../types/shared';
+
+// Tipos
+export interface MenuCategory {
+  id: string;
+  storeId: string;
+  name: string;
+  description: string;
+  image?: string;
+  isActive: boolean;
+  order: number;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface MenuItem {
+  id: string;
+  storeId: string;
+  categoryId: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  isAvailable: boolean;
+  isPopular: boolean;
+  preparationTime: number; // em minutos
+  ingredients?: string[];
+  allergens?: string[];
+  order: number;
+  createdAt: any;
+  updatedAt: any;
+}
 
 // Coleções
 const CATEGORIES_COLLECTION = 'menuCategories';
@@ -29,10 +49,12 @@ const ITEMS_COLLECTION = 'menuItems';
 // ========== CATEGORIAS ==========
 
 /**
- * Buscar todas as categorias de uma loja
+ * Buscar todas as categorias ativas de uma loja
  */
 export const getStoreCategories = async (storeId: string): Promise<MenuCategory[]> => {
   try {
+    console.log('🔵 Buscando categorias da loja:', storeId);
+    
     const q = query(
       collection(db, CATEGORIES_COLLECTION),
       where('storeId', '==', storeId),
@@ -47,77 +69,10 @@ export const getStoreCategories = async (storeId: string): Promise<MenuCategory[
       categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
     });
     
+    console.log('✅ Categorias encontradas:', categories.length);
     return categories;
   } catch (error) {
-    console.error('Erro ao buscar categorias:', error);
-    throw error;
-  }
-};
-
-/**
- * Buscar uma categoria por ID
- */
-export const getCategoryById = async (categoryId: string): Promise<MenuCategory | null> => {
-  try {
-    const categoryDoc = await getDoc(doc(db, CATEGORIES_COLLECTION, categoryId));
-    
-    if (categoryDoc.exists()) {
-      return { id: categoryDoc.id, ...categoryDoc.data() } as MenuCategory;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Erro ao buscar categoria:', error);
-    throw error;
-  }
-};
-
-/**
- * Criar uma nova categoria
- */
-export const createCategory = async (categoryData: CreateMenuCategoryData): Promise<string> => {
-  try {
-    const docRef = await addDoc(collection(db, CATEGORIES_COLLECTION), {
-      ...categoryData,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-    
-    return docRef.id;
-  } catch (error) {
-    console.error('Erro ao criar categoria:', error);
-    throw error;
-  }
-};
-
-/**
- * Atualizar uma categoria
- */
-export const updateCategory = async (
-  categoryId: string, 
-  updates: UpdateMenuCategoryData
-): Promise<void> => {
-  try {
-    const categoryRef = doc(db, CATEGORIES_COLLECTION, categoryId);
-    
-    await updateDoc(categoryRef, {
-      ...updates,
-      updatedAt: new Date()
-    });
-  } catch (error) {
-    console.error('Erro ao atualizar categoria:', error);
-    throw error;
-  }
-};
-
-/**
- * Deletar uma categoria
- */
-export const deleteCategory = async (categoryId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, CATEGORIES_COLLECTION, categoryId));
-  } catch (error) {
-    console.error('Erro ao deletar categoria:', error);
+    console.error('❌ Erro ao buscar categorias:', error);
     throw error;
   }
 };
@@ -129,6 +84,8 @@ export const subscribeToStoreCategories = (
   storeId: string,
   callback: (categories: MenuCategory[]) => void
 ): Unsubscribe => {
+  console.log('🔵 Inscrevendo-se nas categorias da loja:', storeId);
+  
   const q = query(
     collection(db, CATEGORIES_COLLECTION),
     where('storeId', '==', storeId),
@@ -141,9 +98,10 @@ export const subscribeToStoreCategories = (
     querySnapshot.forEach((doc) => {
       categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
     });
+    console.log('✅ Categorias atualizadas em tempo real:', categories.length);
     callback(categories);
   }, (error) => {
-    console.error('Erro no listener de categorias:', error);
+    console.error('❌ Erro no listener de categorias:', error);
     callback([]);
   });
 };
@@ -151,13 +109,16 @@ export const subscribeToStoreCategories = (
 // ========== ITENS DO CARDÁPIO ==========
 
 /**
- * Buscar todos os itens de uma loja
+ * Buscar todos os itens disponíveis de uma loja
  */
 export const getStoreMenuItems = async (storeId: string): Promise<MenuItem[]> => {
   try {
+    console.log('🔵 Buscando itens do menu da loja:', storeId);
+    
     const q = query(
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
+      where('isAvailable', '==', true),
       orderBy('order', 'asc')
     );
     
@@ -168,9 +129,10 @@ export const getStoreMenuItems = async (storeId: string): Promise<MenuItem[]> =>
       items.push({ id: doc.id, ...doc.data() } as MenuItem);
     });
     
+    console.log('✅ Itens do menu encontrados:', items.length);
     return items;
   } catch (error) {
-    console.error('Erro ao buscar itens do cardápio:', error);
+    console.error('❌ Erro ao buscar itens do menu:', error);
     throw error;
   }
 };
@@ -183,6 +145,8 @@ export const getCategoryMenuItems = async (
   categoryId: string
 ): Promise<MenuItem[]> => {
   try {
+    console.log('🔵 Buscando itens da categoria:', categoryId);
+    
     const q = query(
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
@@ -198,27 +162,10 @@ export const getCategoryMenuItems = async (
       items.push({ id: doc.id, ...doc.data() } as MenuItem);
     });
     
+    console.log('✅ Itens da categoria encontrados:', items.length);
     return items;
   } catch (error) {
-    console.error('Erro ao buscar itens da categoria:', error);
-    throw error;
-  }
-};
-
-/**
- * Buscar um item por ID
- */
-export const getMenuItemById = async (itemId: string): Promise<MenuItem | null> => {
-  try {
-    const itemDoc = await getDoc(doc(db, ITEMS_COLLECTION, itemId));
-    
-    if (itemDoc.exists()) {
-      return { id: itemDoc.id, ...itemDoc.data() } as MenuItem;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Erro ao buscar item:', error);
+    console.error('❌ Erro ao buscar itens da categoria:', error);
     throw error;
   }
 };
@@ -228,6 +175,8 @@ export const getMenuItemById = async (itemId: string): Promise<MenuItem | null> 
  */
 export const getPopularItems = async (storeId: string): Promise<MenuItem[]> => {
   try {
+    console.log('🔵 Buscando itens populares da loja:', storeId);
+    
     const q = query(
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
@@ -243,74 +192,32 @@ export const getPopularItems = async (storeId: string): Promise<MenuItem[]> => {
       items.push({ id: doc.id, ...doc.data() } as MenuItem);
     });
     
+    console.log('✅ Itens populares encontrados:', items.length);
     return items;
   } catch (error) {
-    console.error('Erro ao buscar itens populares:', error);
+    console.error('❌ Erro ao buscar itens populares:', error);
     throw error;
   }
 };
 
 /**
- * Criar um novo item
+ * Buscar um item por ID
  */
-export const createMenuItem = async (itemData: CreateMenuItemData): Promise<string> => {
+export const getMenuItemById = async (itemId: string): Promise<MenuItem | null> => {
   try {
-    const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
-      ...itemData,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+    console.log('🔵 Buscando item:', itemId);
     
-    return docRef.id;
-  } catch (error) {
-    console.error('Erro ao criar item:', error);
-    throw error;
-  }
-};
-
-/**
- * Atualizar um item
- */
-export const updateMenuItem = async (
-  itemId: string, 
-  updates: UpdateMenuItemData
-): Promise<void> => {
-  try {
-    const itemRef = doc(db, ITEMS_COLLECTION, itemId);
+    const itemDoc = await getDoc(doc(db, ITEMS_COLLECTION, itemId));
     
-    await updateDoc(itemRef, {
-      ...updates,
-      updatedAt: new Date()
-    });
+    if (itemDoc.exists()) {
+      console.log('✅ Item encontrado');
+      return { id: itemDoc.id, ...itemDoc.data() } as MenuItem;
+    }
+    
+    console.log('❌ Item não encontrado');
+    return null;
   } catch (error) {
-    console.error('Erro ao atualizar item:', error);
-    throw error;
-  }
-};
-
-/**
- * Deletar um item
- */
-export const deleteMenuItem = async (itemId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, ITEMS_COLLECTION, itemId));
-  } catch (error) {
-    console.error('Erro ao deletar item:', error);
-    throw error;
-  }
-};
-
-/**
- * Marcar item como disponível/indisponível
- */
-export const toggleItemAvailability = async (
-  itemId: string, 
-  isAvailable: boolean
-): Promise<void> => {
-  try {
-    await updateMenuItem(itemId, { isAvailable });
-  } catch (error) {
-    console.error('Erro ao alterar disponibilidade do item:', error);
+    console.error('❌ Erro ao buscar item:', error);
     throw error;
   }
 };
@@ -323,6 +230,8 @@ export const subscribeToStoreMenuItems = (
   callback: (items: MenuItem[]) => void,
   categoryId?: string
 ): Unsubscribe => {
+  console.log('🔵 Inscrevendo-se nos itens do menu da loja:', storeId);
+  
   let q;
   
   if (categoryId) {
@@ -330,12 +239,14 @@ export const subscribeToStoreMenuItems = (
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
       where('categoryId', '==', categoryId),
+      where('isAvailable', '==', true),
       orderBy('order', 'asc')
     );
   } else {
     q = query(
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
+      where('isAvailable', '==', true),
       orderBy('order', 'asc')
     );
   }
@@ -345,30 +256,35 @@ export const subscribeToStoreMenuItems = (
     querySnapshot.forEach((doc) => {
       items.push({ id: doc.id, ...doc.data() } as MenuItem);
     });
+    console.log('✅ Itens do menu atualizados em tempo real:', items.length);
     callback(items);
   }, (error) => {
-    console.error('Erro no listener de itens:', error);
+    console.error('❌ Erro no listener de itens:', error);
     callback([]);
   });
 };
 
 /**
- * Listener em tempo real para um item específico
+ * Formatar preço para exibição
  */
-export const subscribeToMenuItem = (
-  itemId: string,
-  callback: (item: MenuItem | null) => void
-): Unsubscribe => {
-  const itemRef = doc(db, ITEMS_COLLECTION, itemId);
-  
-  return onSnapshot(itemRef, (doc) => {
-    if (doc.exists()) {
-      callback({ id: doc.id, ...doc.data() } as MenuItem);
-    } else {
-      callback(null);
-    }
-  }, (error) => {
-    console.error('Erro no listener do item:', error);
-    callback(null);
-  });
-}; 
+export const formatPrice = (price: number): string => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(price);
+};
+
+/**
+ * Formatar tempo de preparo para exibição
+ */
+export const formatPreparationTime = (minutes: number): string => {
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (remainingMinutes === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${remainingMinutes}min`;
+};
