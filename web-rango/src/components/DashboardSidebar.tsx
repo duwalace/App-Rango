@@ -1,90 +1,213 @@
 import { 
-  Home, 
-  Truck, 
-  ShoppingBag, 
-  UtensilsCrossed, 
-  Star, 
-  FolderOpen,
-  Package,
+  BarChart3,
+  ShoppingBag,
   Clock,
+  History,
+  TrendingUp,
+  DollarSign,
+  Package,
+  Users,
+  UtensilsCrossed,
+  Grid3X3,
+  Plus,
+  Eye,
+  Archive,
+  Tag,
+  Ticket,
+  Gift,
+  Bell,
+  Star,
+  UserCheck,
+  Settings,
   MapPin,
   CreditCard,
-  Tag,
-  Settings,
-  User
+  UserPlus,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
-const menuItems = [
-  { title: "Início", icon: Home, url: "/dashboard", badge: null },
-  { title: "Delivery", icon: Truck, url: "/dashboard/delivery", badge: null },
-  { title: "Pedidos", icon: ShoppingBag, url: "/dashboard/orders", badge: null },
-  { title: "Cardápio", icon: UtensilsCrossed, url: "/dashboard/menu", badge: null },
-  { title: "Avaliações", icon: Star, url: "/dashboard/reviews", badge: null },
-  { title: "Catálogo", icon: FolderOpen, url: "/dashboard/catalog", badge: null },
-  { title: "Logística", icon: Package, url: "/dashboard/logistics", badge: "Novo" },
-  { title: "Tempo de entrega", icon: Clock, url: "/dashboard/delivery-time", badge: null },
-  { title: "Área de entrega", icon: MapPin, url: "/dashboard/delivery-area", badge: null },
-  { title: "Tempo de pagamento", icon: CreditCard, url: "/dashboard/payment-time", badge: null },
-  { title: "Promoções", icon: Tag, url: "/dashboard/promotions", badge: null },
-  { title: "Serviços", icon: Settings, url: "/dashboard/services", badge: null },
-  { title: "Perfil", icon: User, url: "/dashboard/profile", badge: null },
+interface MenuSection {
+  title: string;
+  items: {
+    title: string;
+    icon: any;
+    url: string;
+    badge?: string | null;
+    isNew?: boolean;
+  }[];
+}
+
+const menuSections: MenuSection[] = [
+  {
+    title: "VISÃO GERAL",
+    items: [
+      { title: "Dashboard", icon: BarChart3, url: "/dashboard", badge: null },
+      { title: "Pedidos em Andamento", icon: ShoppingBag, url: "/dashboard/orders-active", badge: null },
+      { title: "Histórico de Pedidos", icon: History, url: "/dashboard/orders-history", badge: null },
+    ]
+  },
+  {
+    title: "RELATÓRIOS",
+    items: [
+      { title: "Desempenho da Loja", icon: TrendingUp, url: "/dashboard/reports/performance", badge: null },
+      { title: "Relatório Financeiro", icon: DollarSign, url: "/dashboard/reports/financial", badge: null },
+      { title: "Análise de Itens", icon: Package, url: "/dashboard/reports/items", badge: null },
+      { title: "Análise de Clientes", icon: Users, url: "/dashboard/reports/customers", badge: null },
+    ]
+  },
+  {
+    title: "CARDÁPIO",
+    items: [
+      { title: "Gerenciamento de Itens", icon: UtensilsCrossed, url: "/dashboard/products", badge: null },
+      { title: "Categorias", icon: Grid3X3, url: "/dashboard/menu/categories", badge: null },
+      { title: "Complementos e Variações", icon: Plus, url: "/dashboard/menu/complements", badge: null },
+      { title: "Disponibilidade de Itens", icon: Eye, url: "/dashboard/menu/availability", badge: null },
+      { title: "Controle de Estoque", icon: Archive, url: "/dashboard/menu/inventory", badge: "Novo", isNew: true },
+    ]
+  },
+  {
+    title: "MARKETING",
+    items: [
+      { title: "Promoções", icon: Tag, url: "/dashboard/promotions", badge: null },
+      { title: "Cupons de Desconto", icon: Ticket, url: "/dashboard/marketing/coupons", badge: "Novo", isNew: true },
+      { title: "Programa de Fidelidade", icon: Gift, url: "/dashboard/marketing/loyalty", badge: "Novo", isNew: true },
+      { title: "Notificações", icon: Bell, url: "/dashboard/marketing/notifications", badge: "Novo", isNew: true },
+    ]
+  },
+  {
+    title: "CLIENTES",
+    items: [
+      { title: "Avaliações", icon: Star, url: "/dashboard/reviews", badge: null },
+      { title: "Base de Clientes (CRM)", icon: UserCheck, url: "/dashboard/customers/crm", badge: "Novo", isNew: true },
+    ]
+  },
+  {
+    title: "CONFIGURAÇÕES",
+    items: [
+      { title: "Configurações da Loja", icon: Settings, url: "/dashboard/settings/store", badge: null },
+      { title: "Área de Entrega", icon: MapPin, url: "/dashboard/settings/delivery-area", badge: "Novo", isNew: true },
+      { title: "Dados Bancários", icon: CreditCard, url: "/dashboard/settings/banking", badge: null },
+      { title: "Gestão de Usuários", icon: UserPlus, url: "/dashboard/settings/users", badge: "Novo", isNew: true },
+    ]
+  }
 ];
 
 export function DashboardSidebar() {
   const { open } = useSidebar();
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    new Set(["VISÃO GERAL", "CARDÁPIO"]) // Seções abertas por padrão
+  );
+
+  const toggleSection = (sectionTitle: string) => {
+    const newExpanded = new Set(expandedSections);
+    if (newExpanded.has(sectionTitle)) {
+      newExpanded.delete(sectionTitle);
+    } else {
+      newExpanded.add(sectionTitle);
+    }
+    setExpandedSections(newExpanded);
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarContent>
+        {/* Logo */}
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-primary italic">ifood</span>
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <UtensilsCrossed className="h-4 w-4 text-primary-foreground" />
+            </div>
+            {open && (
+              <div>
+                <span className="text-lg font-bold text-foreground">Rango Admin</span>
+                <p className="text-xs text-muted-foreground">Painel Profissional</p>
+              </div>
+            )}
           </div>
-          {open && (
-            <p className="text-xs text-muted-foreground mt-1">Painel Giga Loja</p>
-          )}
         </div>
 
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/dashboard"}
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "hover:bg-sidebar-accent"
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                      {item.badge && (
-                        <span className="ml-auto text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Menu Sections */}
+        <div className="py-2">
+          {menuSections.map((section) => {
+            const isExpanded = expandedSections.has(section.title);
+            
+            return (
+              <SidebarGroup key={section.title}>
+                {open && (
+                  <SidebarGroupLabel 
+                    className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground transition-colors flex items-center justify-between"
+                    onClick={() => toggleSection(section.title)}
+                  >
+                    <span>{section.title}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                  </SidebarGroupLabel>
+                )}
+                
+                {(isExpanded || !open) && (
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {section.items.map((item) => (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild>
+                            <NavLink
+                              to={item.url}
+                              end={item.url === "/dashboard"}
+                              className={({ isActive }) =>
+                                cn(
+                                  "flex items-center gap-3 px-3 py-2 rounded-lg transition-smooth text-sm",
+                                  isActive
+                                    ? "bg-primary/10 text-primary font-medium"
+                                    : "hover:bg-sidebar-accent text-sidebar-foreground"
+                                )
+                              }
+                            >
+                              <item.icon className="h-4 w-4 flex-shrink-0" />
+                              {open && (
+                                <>
+                                  <span className="flex-1">{item.title}</span>
+                                  {item.badge && (
+                                    <span 
+                                      className={cn(
+                                        "text-xs px-2 py-0.5 rounded-full font-medium",
+                                        item.isNew 
+                                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                          : "bg-primary/20 text-primary"
+                                      )}
+                                    >
+                                      {item.badge}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                )}
+              </SidebarGroup>
+            );
+          })}
+        </div>
       </SidebarContent>
     </Sidebar>
   );

@@ -15,12 +15,16 @@ import {
 import { db } from '@/lib/firebase';
 import { 
   MenuCategory, 
-  MenuItem, 
   CreateMenuCategoryData, 
-  UpdateMenuCategoryData,
+  UpdateMenuCategoryData
+} from '@/types/shared';
+
+// Importar tipos avançados do novo schema
+import {
+  MenuItem,
   CreateMenuItemData,
   UpdateMenuItemData
-} from '@/types/shared';
+} from '@/types/menu-advanced';
 
 // Coleções
 const CATEGORIES_COLLECTION = 'menuCategories';
@@ -148,6 +152,56 @@ export const subscribeToStoreCategories = (
   });
 };
 
+/**
+ * Atualizar ordem das categorias (drag and drop)
+ */
+export const updateCategoriesOrder = async (
+  storeId: string,
+  orderedCategoryIds: string[]
+): Promise<void> => {
+  try {
+    // Batch update para performance
+    const batch = orderedCategoryIds.map(async (categoryId, index) => {
+      const categoryRef = doc(db, CATEGORIES_COLLECTION, categoryId);
+      return updateDoc(categoryRef, {
+        order: index,
+        updatedAt: new Date()
+      });
+    });
+    
+    await Promise.all(batch);
+    console.log('✅ Ordem das categorias atualizada');
+  } catch (error) {
+    console.error('❌ Erro ao atualizar ordem:', error);
+    throw error;
+  }
+};
+
+/**
+ * Buscar todas as categorias (incluindo inativas) para gestão
+ */
+export const getAllStoreCategories = async (storeId: string): Promise<MenuCategory[]> => {
+  try {
+    const q = query(
+      collection(db, CATEGORIES_COLLECTION),
+      where('storeId', '==', storeId),
+      orderBy('order', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const categories: MenuCategory[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
+    });
+    
+    return categories;
+  } catch (error) {
+    console.error('Erro ao buscar todas as categorias:', error);
+    throw error;
+  }
+};
+
 // ========== ITENS DO CARDÁPIO ==========
 
 /**
@@ -251,19 +305,22 @@ export const getPopularItems = async (storeId: string): Promise<MenuItem[]> => {
 };
 
 /**
- * Criar um novo item
+ * Criar um novo item com schema avançado
  */
 export const createMenuItem = async (itemData: CreateMenuItemData): Promise<string> => {
   try {
+    console.log('🔵 Criando novo item no Firestore...', itemData);
+    
     const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
       ...itemData,
       createdAt: new Date(),
       updatedAt: new Date()
     });
     
+    console.log('✅ Item criado com sucesso:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Erro ao criar item:', error);
+    console.error('❌ Erro ao criar item:', error);
     throw error;
   }
 };
@@ -371,4 +428,81 @@ export const subscribeToMenuItem = (
     console.error('Erro no listener do item:', error);
     callback(null);
   });
+}; 
+
+/**
+ * Atualizar apenas disponibilidade de um item (rápido)
+ */
+export const setItemAvailability = async (
+  itemId: string,
+  isAvailable: boolean
+): Promise<void> => {
+  try {
+    const itemRef = doc(db, ITEMS_COLLECTION, itemId);
+    await updateDoc(itemRef, {
+      isAvailable,
+      updatedAt: new Date()
+    });
+    console.log(`✅ Disponibilidade do item ${itemId} atualizada para: ${isAvailable}`);
+  } catch (error) {
+    console.error('❌ Erro ao atualizar disponibilidade:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualizar estoque de um item
+ */
+export const updateItemStock = async (
+  itemId: string,
+  stockData: {
+    currentStock: number;
+    autoDisable?: boolean;
+  }
+): Promise<void> => {
+  try {
+    const itemRef = doc(db, ITEMS_COLLECTION, itemId);
+    const updates: any = {
+      'stockControl.currentStock': stockData.currentStock,
+      'stockControl.lastRestocked': new Date(),
+      updatedAt: new Date()
+    };
+    
+    // Auto-desabilitar se estoque zero
+    if (stockData.autoDisable && stockData.currentStock === 0) {
+      updates.isAvailable = false;
+    }
+    
+    await updateDoc(itemRef, updates);
+    console.log(`✅ Estoque do item ${itemId} atualizado para: ${stockData.currentStock}`);
+  } catch (error) {
+    console.error('❌ Erro ao atualizar estoque:', error);
+    throw error;
+  }
+};
+
+/**
+ * Buscar itens com controle de estoque ativado
+ */
+export const getItemsWithStockControl = async (storeId: string): Promise<MenuItem[]> => {
+  try {
+    const q = query(
+      collection(db, ITEMS_COLLECTION),
+      where('storeId', '==', storeId),
+      where('stockControl.enabled', '==', true),
+      orderBy('order', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const items: MenuItem[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      items.push({ id: doc.id, ...doc.data() } as MenuItem);
+    });
+    
+    return items;
+  } catch (error) {
+    console.error('Erro ao buscar itens com estoque:', error);
+    throw error;
+  }
 }; 

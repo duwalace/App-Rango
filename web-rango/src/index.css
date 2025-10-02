@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -17,27 +19,35 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 15%;
 
+    /* iFood-style red primary */
     --primary: 355 85% 52%;
     --primary-foreground: 0 0% 100%;
+    --primary-hover: 355 85% 47%;
 
     --secondary: 0 0% 96%;
     --secondary-foreground: 0 0% 15%;
 
+    /* Muted - for subtle backgrounds */
     --muted: 0 0% 96%;
     --muted-foreground: 0 0% 45%;
 
+    /* Accent - subtle hover states */
     --accent: 355 85% 52%;
     --accent-foreground: 0 0% 100%;
 
+    /* Destructive - red for delete actions */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Border colors */
     --border: 0 0% 90%;
+    --border-strong: 0 0% 82%;
     --input: 0 0% 90%;
     --ring: 355 85% 52%;
 
     --radius: 0.5rem;
 
+    /* Sidebar variables */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 20%;
     --sidebar-primary: 355 85% 52%;
@@ -47,12 +57,62 @@ All colors MUST be HSL.
     --sidebar-border: 0 0% 93%;
     --sidebar-ring: 355 85% 52%;
 
+    /* Shadows for elevation */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 15% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 15% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(0 0% 15% / 0.1);
+
+    /* Transitions */
+    --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
     /* Custom design tokens */
     --ifood-red: 355 85% 52%;
     --text-primary: 0 0% 15%;
     --text-secondary: 0 0% 45%;
     --bg-light: 0 0% 98%;
     --shadow: 0 0% 0%;
+  }
+
+  .dark {
+    --background: 0 0% 9%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 355 85% 52%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 355 85% 56%;
+
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --border-strong: 0 0% 28%;
+    --input: 0 0% 20%;
+    --ring: 355 85% 52%;
+
+    --sidebar-background: 0 0% 11%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 355 85% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 16%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 355 85% 52%;
   }
 }
 
@@ -62,6 +122,27 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer utilities {
+  .shadow-card {
+    box-shadow: var(--shadow-md);
+  }
+  
+  .shadow-card-hover {
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
   }
 }

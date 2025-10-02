@@ -2,6 +2,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { User, onAuthStateChanged, signOut, AuthError } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from '../services/firebaseConfig';
 import { UserRole } from '../services/authService';
 
@@ -74,28 +75,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log('=== AUTHCONTEXT: INICIANDO LOGOUT ===');
     console.log('Estado atual - currentUser:', currentUser?.email);
     console.log('Estado atual - userRole:', currentUser?.role);
-    console.log('Auth object:', auth);
-    console.log('Auth currentUser:', auth.currentUser?.email);
     
     try {
-      console.log('Chamando signOut do Firebase...');
+      // 1. Fazer signOut do Firebase primeiro
+      console.log('🚪 Chamando signOut do Firebase...');
       await signOut(auth);
       console.log('✅ signOut do Firebase concluído');
-      // O onAuthStateChanged vai limpar o estado automaticamente.
       
-      // O onAuthStateChanged vai limpar o estado automaticamente
+      // 2. Limpar AsyncStorage (Firebase auth keys)
+      console.log('🧹 Limpando AsyncStorage...');
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const firebaseKeys = keys.filter(key => 
+          key.startsWith('firebase:') || 
+          key.startsWith('firebaseAuth:') ||
+          key.includes('auth')
+        );
+        
+        if (firebaseKeys.length > 0) {
+          console.log('🗑️ Removendo', firebaseKeys.length, 'chaves do Firebase');
+          await AsyncStorage.multiRemove(firebaseKeys);
+        }
+      } catch (storageError) {
+        console.warn('⚠️ Erro ao limpar AsyncStorage (não crítico):', storageError);
+      }
+      
+      // 3. Limpar estado local (garantia extra)
+      console.log('🧼 Limpando estado local...');
+      setCurrentUser(null);
+      
       console.log('✅ LOGOUT REALIZADO COM SUCESSO!');
-      console.log('onAuthStateChanged deve ser disparado automaticamente');
+      
     } catch (error: any) {
       console.error('❌ ERRO NO LOGOUT (AuthContext):', error);
-      console.error('Tipo do erro:', typeof error);
       console.error('Mensagem:', error?.message || 'Erro desconhecido');
-      console.error('Código:', error?.code || 'Código não disponível');
-      console.error('Stack:', error?.stack || 'Stack não disponível');
       
       // Em caso de erro, limpar estado manualmente
-      console.log('Limpando estado manualmente devido ao erro...');
+      console.log('⚠️ Limpando estado manualmente devido ao erro...');
       setCurrentUser(null);
+      
+      // Tentar limpar AsyncStorage mesmo com erro
+      try {
+        await AsyncStorage.clear();
+        console.log('✅ AsyncStorage limpo completamente (fallback)');
+      } catch (clearError) {
+        console.error('❌ Erro ao limpar AsyncStorage:', clearError);
+      }
       
       throw error;
     }

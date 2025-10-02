@@ -1,0 +1,130 @@
+rules_version = '2';
+
+/**
+ * Firebase Storage Security Rules
+ * 
+ * Estrutura de diretórios:
+ * /stores/{storeId}/products/{productId}/{imageName}
+ * /stores/{storeId}/products/{productId}/thumbnails/{thumbName}
+ */
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ========================================
+    // HELPER FUNCTIONS
+    // ========================================
+    
+    // Verificar se usuário está autenticado
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Obter dados do usuário do Firestore
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Verificar se usuário é dono da loja
+    function isStoreOwner(storeId) {
+      return isSignedIn() && 
+             getUserData().role == 'dono_da_loja' && 
+             getUserData().storeId == storeId;
+    }
+    
+    // Verificar se é admin
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+    
+    // Validar tipo de arquivo (imagens)
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // Validar tamanho do arquivo (máx 5MB)
+    function isValidSize() {
+      return request.resource.size <= 5 * 1024 * 1024;
+    }
+    
+    // ========================================
+    // REGRAS PARA PRODUTOS
+    // ========================================
+    
+    match /stores/{storeId}/products/{productId}/{allPaths=**} {
+      // Leitura: PÚBLICA
+      // Qualquer pessoa pode visualizar imagens de produtos
+      allow read: if true;
+      
+      // Escrita: APENAS DONO DA LOJA ou ADMIN
+      allow write: if (isStoreOwner(storeId) || isAdmin()) 
+                      && isImage() 
+                      && isValidSize();
+      
+      // Deleção: APENAS DONO DA LOJA ou ADMIN
+      allow delete: if isStoreOwner(storeId) || isAdmin();
+    }
+    
+    // ========================================
+    // REGRAS PARA LOJAS (logos, banners)
+    // ========================================
+    
+    match /stores/{storeId}/store-assets/{allPaths=**} {
+      // Leitura: PÚBLICA
+      allow read: if true;
+      
+      // Escrita: APENAS DONO DA LOJA ou ADMIN
+      allow write: if (isStoreOwner(storeId) || isAdmin()) 
+                      && isImage() 
+                      && isValidSize();
+      
+      // Deleção: APENAS DONO DA LOJA ou ADMIN
+      allow delete: if isStoreOwner(storeId) || isAdmin();
+    }
+    
+    // ========================================
+    // REGRAS PARA AVATARES DE USUÁRIOS
+    // ========================================
+    
+    match /users/{userId}/avatar/{imageName} {
+      // Leitura: PÚBLICA
+      allow read: if true;
+      
+      // Escrita: APENAS O PRÓPRIO USUÁRIO
+      allow write: if isSignedIn() && 
+                      request.auth.uid == userId &&
+                      isImage() &&
+                      isValidSize();
+      
+      // Deleção: APENAS O PRÓPRIO USUÁRIO
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // ========================================
+    // REGRAS PARA DOCUMENTOS DE ENTREGADORES
+    // ========================================
+    
+    match /delivery-persons/{userId}/documents/{documentName} {
+      // Leitura: APENAS O PRÓPRIO ENTREGADOR ou ADMIN
+      allow read: if isSignedIn() && 
+                     (request.auth.uid == userId || isAdmin());
+      
+      // Escrita: APENAS O PRÓPRIO ENTREGADOR
+      allow write: if isSignedIn() && 
+                      request.auth.uid == userId &&
+                      isImage() &&
+                      isValidSize();
+      
+      // Deleção: APENAS ADMIN
+      allow delete: if isAdmin();
+    }
+    
+    // ========================================
+    // BLOQUEIO PADRÃO
+    // ========================================
+    // Qualquer caminho não especificado: BLOQUEADO
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+} 

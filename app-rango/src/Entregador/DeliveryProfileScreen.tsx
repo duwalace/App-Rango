@@ -83,7 +83,7 @@ const DeliveryProfileScreen: React.FC = () => {
     }
   ]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     Alert.alert(
       'Sair da Conta',
       'Tem certeza que deseja sair da sua conta?',
@@ -94,10 +94,12 @@ const DeliveryProfileScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('🔵 DeliveryProfileScreen: Iniciando logout...');
               await logout();
-              console.log('Logout realizado com sucesso');
+              console.log('✅ DeliveryProfileScreen: Logout realizado com sucesso');
+              // Não precisa navegar - o AuthContext vai detectar e mostrar a tela de login automaticamente
             } catch (error) {
-              console.error('Erro no logout:', error);
+              console.error('❌ DeliveryProfileScreen: Erro no logout:', error);
               Alert.alert('Erro', 'Não foi possível sair da conta. Tente novamente.');
             }
           }

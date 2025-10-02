@@ -385,4 +385,123 @@ export const getOrderStatistics = async (storeId: string) => {
     console.error('Erro ao calcular estatísticas:', error);
     throw error;
   }
+};
+
+/**
+ * Obter resumo diário (KPIs) para o dashboard
+ */
+export const getDailySummary = async (storeId: string) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Buscar pedidos da loja
+    const orders = await getStoreOrders(storeId);
+    
+    // Filtrar pedidos de hoje
+    const todayOrders = orders.filter(order => {
+      const orderDate = order.createdAt instanceof Date 
+        ? order.createdAt 
+        : new Date(order.createdAt);
+      return orderDate >= today;
+    });
+    
+    // Filtrar pedidos de ontem
+    const yesterdayOrders = orders.filter(order => {
+      const orderDate = order.createdAt instanceof Date 
+        ? order.createdAt 
+        : new Date(order.createdAt);
+      return orderDate >= yesterday && orderDate < today;
+    });
+    
+    // Calcular faturamento de hoje (apenas pedidos entregues/concluídos)
+    const todayRevenue = todayOrders
+      .filter(order => order.status === 'delivered' || order.status === 'completed')
+      .reduce((sum, order) => sum + order.total, 0);
+    
+    // Calcular faturamento de ontem
+    const yesterdayRevenue = yesterdayOrders
+      .filter(order => order.status === 'delivered' || order.status === 'completed')
+      .reduce((sum, order) => sum + order.total, 0);
+    
+    // Total de pedidos hoje
+    const todayOrdersCount = todayOrders.length;
+    const yesterdayOrdersCount = yesterdayOrders.length;
+    
+    // Ticket médio hoje
+    const todayAverageTicket = todayOrdersCount > 0 ? todayRevenue / todayOrdersCount : 0;
+    const yesterdayAverageTicket = yesterdayOrdersCount > 0 ? yesterdayRevenue / yesterdayOrdersCount : 0;
+    
+    // Calcular tempo médio de entrega (simulado por enquanto - será real quando tivermos timestamps)
+    const avgDeliveryTime = "25 min"; // TODO: calcular com base em timestamps reais
+    
+    // Calcular variações percentuais
+    const revenueChange = yesterdayRevenue > 0 
+      ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100 
+      : todayRevenue > 0 ? 100 : 0;
+    
+    const ordersChange = yesterdayOrdersCount > 0 
+      ? ((todayOrdersCount - yesterdayOrdersCount) / yesterdayOrdersCount) * 100 
+      : todayOrdersCount > 0 ? 100 : 0;
+    
+    const ticketChange = yesterdayAverageTicket > 0 
+      ? ((todayAverageTicket - yesterdayAverageTicket) / yesterdayAverageTicket) * 100 
+      : todayAverageTicket > 0 ? 100 : 0;
+    
+    return {
+      revenue: {
+        value: todayRevenue,
+        change: revenueChange,
+        isPositive: revenueChange >= 0
+      },
+      orders: {
+        value: todayOrdersCount,
+        change: ordersChange,
+        isPositive: ordersChange >= 0
+      },
+      averageTicket: {
+        value: todayAverageTicket,
+        change: ticketChange,
+        isPositive: ticketChange >= 0
+      },
+      deliveryTime: {
+        value: avgDeliveryTime,
+        change: -3.2, // Mock - será calculado quando tivermos timestamps
+        isPositive: true
+      }
+    };
+  } catch (error) {
+    console.error('Erro ao buscar resumo diário:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obter pedidos recentes para o dashboard
+ */
+export const getRecentOrders = async (storeId: string, limit: number = 5): Promise<Order[]> => {
+  try {
+    const q = query(
+      collection(db, ORDERS_COLLECTION),
+      where('storeId', '==', storeId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const orders: Order[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      if (orders.length < limit) {
+        orders.push({ id: doc.id, ...doc.data() } as Order);
+      }
+    });
+    
+    return orders;
+  } catch (error) {
+    console.error('Erro ao buscar pedidos recentes:', error);
+    throw error;
+  }
 }; 

@@ -1,9 +1,155 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // REGRAS ABERTAS PARA TESTE - PERMITIR TUDO
+    
+    // ==========================================
+    // FUNÇÕES HELPER
+    // ==========================================
+    
+    // Verificar se usuário está autenticado
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Verificar se é o próprio usuário
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Buscar dados do usuário atual
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Verificar se usuário é dono de uma loja específica
+    function isStoreOwner(storeId) {
+      return isSignedIn() && 
+             getUserData().role == 'dono_da_loja' && 
+             getUserData().storeId == storeId;
+    }
+    
+    // Verificar se é administrador
+    function isAdmin() {
+      return isSignedIn() && getUserData().role == 'admin';
+    }
+    
+    // Verificar se é entregador
+    function isDeliveryPerson() {
+      return isSignedIn() && getUserData().role == 'entregador';
+    }
+    
+    // ==========================================
+    // COLEÇÃO: users
+    // ==========================================
+    match /users/{userId} {
+      // Qualquer pessoa AUTENTICADA pode ler perfis (necessário para exibir nomes)
+      allow read: if isSignedIn();
+      
+      // Criar: apenas durante signup (próprio UID)
+      allow create: if request.auth.uid == userId;
+      
+      // Atualizar/Deletar: apenas próprio usuário ou admin
+      allow update, delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: stores
+    // ==========================================
+    match /stores/{storeId} {
+      // Leitura pública (necessário para clientes verem restaurantes)
+      allow read: if true;
+      
+      // Criar: apenas usuários autenticados
+      allow create: if isSignedIn();
+      
+      // Atualizar/Deletar: apenas dono da loja ou admin
+      allow update, delete: if isStoreOwner(storeId) || isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: menuCategories
+    // ==========================================
+    match /menuCategories/{categoryId} {
+      // Leitura pública (clientes precisam ver categorias)
+      allow read: if true;
+      
+      // Escrita: apenas dono da loja correspondente
+      allow create: if isSignedIn() && isStoreOwner(request.resource.data.storeId);
+      allow update, delete: if isSignedIn() && (
+        isStoreOwner(resource.data.storeId) || isAdmin()
+      );
+    }
+    
+    // ==========================================
+    // COLEÇÃO: menuItems
+    // ==========================================
+    match /menuItems/{itemId} {
+      // Leitura pública
+      allow read: if true;
+      
+      // Criar: apenas dono da loja
+      allow create: if isSignedIn() && isStoreOwner(request.resource.data.storeId);
+      
+      // Atualizar/Deletar: apenas dono da loja ou admin
+      allow update, delete: if isSignedIn() && (
+        isStoreOwner(resource.data.storeId) || isAdmin()
+      );
+    }
+    
+    // ==========================================
+    // COLEÇÃO: orders
+    // ==========================================
+    match /orders/{orderId} {
+      // Leitura: 
+      // - Cliente vê seus próprios pedidos
+      // - Loja vê pedidos feitos nela
+      // - Entregador vê pedidos atribuídos a ele
+      // - Admin vê tudo
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.customerId ||
+        getUserData().storeId == resource.data.storeId ||
+        request.auth.uid == resource.data.deliveryPersonId ||
+        isAdmin()
+      );
+      
+      // Criar: apenas cliente autenticado criando pedido para si mesmo
+      allow create: if isSignedIn() && 
+                       request.auth.uid == request.resource.data.customerId &&
+                       request.resource.data.status == 'pending';
+      
+      // Atualizar:
+      // - Dono da loja pode atualizar status e atribuir entregador
+      // - Cliente pode cancelar (apenas se status for 'pending')
+      // - Entregador pode atualizar status de entrega
+      allow update: if isSignedIn() && (
+        // Loja pode atualizar
+        (isStoreOwner(resource.data.storeId) && 
+         request.resource.data.customerId == resource.data.customerId) ||
+        
+        // Cliente pode cancelar se ainda pendente
+        (request.auth.uid == resource.data.customerId && 
+         resource.data.status == 'pending' && 
+         request.resource.data.status == 'cancelled') ||
+        
+        // Entregador pode atualizar status de entrega
+        (isDeliveryPerson() && 
+         request.auth.uid == resource.data.deliveryPersonId &&
+         request.resource.data.status in ['in_delivery', 'delivered']) ||
+        
+        // Admin pode tudo
+        isAdmin()
+      );
+      
+      // Deletar: apenas admin (manter histórico)
+      allow delete: if isAdmin();
+    }
+    
+    // ==========================================
+    // BLOQUEIO PADRÃO
+    // ==========================================
+    // Qualquer coleção não especificada: BLOQUEADA
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
