@@ -305,17 +305,46 @@ export const getPopularItems = async (storeId: string): Promise<MenuItem[]> => {
 };
 
 /**
+ * Remove campos com valor undefined de um objeto
+ * (Firestore não aceita undefined, apenas null ou campo ausente)
+ */
+const removeUndefinedFields = <T extends Record<string, any>>(obj: T): Partial<T> => {
+  const cleaned: any = {};
+  
+  for (const key in obj) {
+    const value = obj[key];
+    
+    // Pular campos undefined
+    if (value === undefined) {
+      continue;
+    }
+    
+    // Se for um objeto (e não array ou Date), limpar recursivamente
+    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      cleaned[key] = removeUndefinedFields(value);
+    } else {
+      cleaned[key] = value;
+    }
+  }
+  
+  return cleaned;
+};
+
+/**
  * Criar um novo item com schema avançado
  */
 export const createMenuItem = async (itemData: CreateMenuItemData): Promise<string> => {
   try {
     console.log('🔵 Criando novo item no Firestore...', itemData);
     
-    const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
+    // Remover campos undefined antes de enviar
+    const cleanedData = removeUndefinedFields({
       ...itemData,
       createdAt: new Date(),
       updatedAt: new Date()
     });
+    
+    const docRef = await addDoc(collection(db, ITEMS_COLLECTION), cleanedData);
     
     console.log('✅ Item criado com sucesso:', docRef.id);
     return docRef.id;
@@ -335,10 +364,13 @@ export const updateMenuItem = async (
   try {
     const itemRef = doc(db, ITEMS_COLLECTION, itemId);
     
-    await updateDoc(itemRef, {
+    // Remover campos undefined antes de atualizar
+    const cleanedUpdates = removeUndefinedFields({
       ...updates,
       updatedAt: new Date()
     });
+    
+    await updateDoc(itemRef, cleanedUpdates);
   } catch (error) {
     console.error('Erro ao atualizar item:', error);
     throw error;

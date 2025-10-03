@@ -213,7 +213,7 @@ export default function CreateProduct() {
         servingSize: formData.servingSize,
         ingredients: formData.ingredients || [],
         allergens: formData.allergens || [],
-        nutritionalInfo: undefined,
+        // nutritionalInfo removido - será adicionado apenas se existir
         dietaryFlags: formData.dietaryFlags || [],
         tags: [
           formData.name!.toLowerCase(),

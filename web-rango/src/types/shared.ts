@@ -138,7 +138,8 @@ export type UserRole =
   | 'cliente' 
   | 'entregador' 
   | 'dono_da_loja' 
-  | 'admin';
+  | 'admin'
+  | 'dono_do_site';
 
 export interface User {
   uid: string;

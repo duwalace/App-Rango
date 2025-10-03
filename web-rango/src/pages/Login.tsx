@@ -30,6 +30,27 @@ const Login = () => {
       console.log('🔵 Tentando fazer login...');
       await login(email, password);
       console.log('✅ Login realizado, redirecionando...');
+      
+      // Buscar dados do usuário para verificar o role
+      const { getDoc, doc } = await import('firebase/firestore');
+      const { auth, db } = await import('@/lib/firebase');
+      
+      if (auth.currentUser) {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          console.log('👤 Role do usuário:', userData.role);
+          
+          // Redirecionar baseado no role
+          if (userData.role === 'dono_do_site') {
+            navigate("/admin");
+          } else {
+            navigate("/dashboard");
+          }
+          return;
+        }
+      }
+      
       navigate("/dashboard");
     } catch (error: any) {
       console.error('❌ Erro no login:', error);

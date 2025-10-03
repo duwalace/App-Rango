@@ -28,7 +28,7 @@ service firebase.storage {
     // Verificar se usuário é dono da loja
     function isStoreOwner(storeId) {
       return isSignedIn() && 
-             getUserData().role == 'dono_da_loja' && 
+             (getUserData().role == 'dono_da_loja' || getUserData().role == 'store_owner') && 
              getUserData().storeId == storeId;
     }
     

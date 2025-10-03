@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
 interface StoreOwner extends User {
-  role: 'dono_da_loja' | 'store_owner';
+  role: 'dono_da_loja' | 'store_owner' | 'dono_do_site';
   storeId?: string;
   storeName?: string;
 }
@@ -32,17 +32,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const userData = userDoc.data();
             console.log('📋 Dados do usuário encontrados:', userData);
             
-            if (userData.role === 'dono_da_loja' || userData.role === 'store_owner') {
+            if (userData.role === 'dono_da_loja' || userData.role === 'store_owner' || userData.role === 'dono_do_site') {
               setUser({
                 ...firebaseUser,
                 role: userData.role,
                 storeId: userData.storeId,
                 storeName: userData.storeName
               });
-              console.log('✅ Usuário logado com sucesso');
+              console.log('✅ Usuário logado com sucesso. Role:', userData.role);
             } else {
-              console.log('❌ Usuário não é dono de loja. Role:', userData.role);
-              // Usuário não é dono de loja
+              console.log('❌ Usuário não tem permissão para acessar. Role:', userData.role);
+              // Usuário não tem permissão
               await signOut(auth);
               setUser(null);
             }
