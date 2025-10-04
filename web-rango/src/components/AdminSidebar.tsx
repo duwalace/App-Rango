@@ -8,7 +8,8 @@ import {
   Settings,
   Headphones,
   ChevronLeft,
-  Crown
+  Crown,
+  Tag
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useSidebar } from "./ui/sidebar";
@@ -33,6 +34,11 @@ const adminMenuItems = [
     title: "Financeiro Global",
     icon: DollarSign,
     href: "/admin/financial",
+  },
+  {
+    title: "Tipos de Loja",
+    icon: Tag,
+    href: "/admin/store-types",
   },
   {
     title: "Configurações",

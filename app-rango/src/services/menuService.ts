@@ -265,6 +265,70 @@ export const subscribeToStoreMenuItems = (
 };
 
 /**
+ * Buscar produtos por tags (para exibir na tela inicial por categoria)
+ * Ex: tags contendo "pizza", "marmita", etc
+ */
+export const getProductsByTag = async (tag: string, limit: number = 10): Promise<MenuItem[]> => {
+  try {
+    console.log(`🔵 Buscando produtos com tag: ${tag}`);
+    
+    const q = query(
+      collection(db, ITEMS_COLLECTION),
+      where('tags', 'array-contains', tag.toLowerCase()),
+      where('isAvailable', '==', true),
+      orderBy('sales', 'desc') // Ordenar pelos mais vendidos
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const items: MenuItem[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      if (items.length < limit) {
+        items.push({ id: doc.id, ...doc.data() } as MenuItem);
+      }
+    });
+    
+    console.log(`✅ Produtos com tag "${tag}" encontrados:`, items.length);
+    return items;
+  } catch (error) {
+    console.error(`❌ Erro ao buscar produtos com tag "${tag}":`, error);
+    // Se der erro de índice, retornar array vazio por enquanto
+    return [];
+  }
+};
+
+/**
+ * Buscar produtos populares de todas as lojas para tela inicial
+ */
+export const getPopularProducts = async (limit: number = 10): Promise<MenuItem[]> => {
+  try {
+    console.log('🔵 Buscando produtos populares de todas as lojas');
+    
+    const q = query(
+      collection(db, ITEMS_COLLECTION),
+      where('isAvailable', '==', true),
+      where('isPopular', '==', true),
+      orderBy('sales', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const items: MenuItem[] = [];
+    
+    querySnapshot.forEach((doc) => {
+      if (items.length < limit) {
+        items.push({ id: doc.id, ...doc.data() } as MenuItem);
+      }
+    });
+    
+    console.log('✅ Produtos populares encontrados:', items.length);
+    return items;
+  } catch (error) {
+    console.error('❌ Erro ao buscar produtos populares:', error);
+    return [];
+  }
+};
+
+/**
  * Formatar preço para exibição
  */
 export const formatPrice = (price: number): string => {

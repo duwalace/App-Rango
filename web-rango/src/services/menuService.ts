@@ -34,26 +34,32 @@ const ITEMS_COLLECTION = 'menuItems';
 
 /**
  * Buscar todas as categorias de uma loja
+ * CORRIGIDO: Remove orderBy para evitar necessidade de índice composto
  */
 export const getStoreCategories = async (storeId: string): Promise<MenuCategory[]> => {
   try {
+    console.log('🔍 getStoreCategories: Buscando categorias da loja', storeId);
     const q = query(
       collection(db, CATEGORIES_COLLECTION),
       where('storeId', '==', storeId),
-      where('isActive', '==', true),
-      orderBy('order', 'asc')
+      where('isActive', '==', true)
     );
     
     const querySnapshot = await getDocs(q);
+    console.log('🔍 getStoreCategories: Docs recebidos:', querySnapshot.size);
     const categories: MenuCategory[] = [];
     
     querySnapshot.forEach((doc) => {
       categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
     });
     
+    // Ordenar em memória por 'order'
+    categories.sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    console.log('✅ getStoreCategories: Retornando', categories.length, 'categorias');
     return categories;
   } catch (error) {
-    console.error('Erro ao buscar categorias:', error);
+    console.error('❌ getStoreCategories: Erro ao buscar categorias:', error);
     throw error;
   }
 };
@@ -128,6 +134,7 @@ export const deleteCategory = async (categoryId: string): Promise<void> => {
 
 /**
  * Listener em tempo real para categorias de uma loja
+ * CORRIGIDO: Remove orderBy para evitar necessidade de índice composto
  */
 export const subscribeToStoreCategories = (
   storeId: string,
@@ -136,8 +143,7 @@ export const subscribeToStoreCategories = (
   const q = query(
     collection(db, CATEGORIES_COLLECTION),
     where('storeId', '==', storeId),
-    where('isActive', '==', true),
-    orderBy('order', 'asc')
+    where('isActive', '==', true)
   );
   
   return onSnapshot(q, (querySnapshot) => {
@@ -145,6 +151,8 @@ export const subscribeToStoreCategories = (
     querySnapshot.forEach((doc) => {
       categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
     });
+    // Ordenar em memória por 'order'
+    categories.sort((a, b) => (a.order || 0) - (b.order || 0));
     callback(categories);
   }, (error) => {
     console.error('Erro no listener de categorias:', error);
@@ -179,13 +187,13 @@ export const updateCategoriesOrder = async (
 
 /**
  * Buscar todas as categorias (incluindo inativas) para gestão
+ * CORRIGIDO: Remove orderBy para evitar necessidade de índice composto
  */
 export const getAllStoreCategories = async (storeId: string): Promise<MenuCategory[]> => {
   try {
     const q = query(
       collection(db, CATEGORIES_COLLECTION),
-      where('storeId', '==', storeId),
-      orderBy('order', 'asc')
+      where('storeId', '==', storeId)
     );
     
     const querySnapshot = await getDocs(q);
@@ -194,6 +202,9 @@ export const getAllStoreCategories = async (storeId: string): Promise<MenuCatego
     querySnapshot.forEach((doc) => {
       categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
     });
+    
+    // Ordenar em memória por 'order'
+    categories.sort((a, b) => (a.order || 0) - (b.order || 0));
     
     return categories;
   } catch (error) {
@@ -231,6 +242,7 @@ export const getStoreMenuItems = async (storeId: string): Promise<MenuItem[]> =>
 
 /**
  * Buscar itens de uma categoria específica
+ * CORRIGIDO: Remove orderBy para evitar necessidade de índice composto
  */
 export const getCategoryMenuItems = async (
   storeId: string, 
@@ -241,8 +253,7 @@ export const getCategoryMenuItems = async (
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
       where('categoryId', '==', categoryId),
-      where('isAvailable', '==', true),
-      orderBy('order', 'asc')
+      where('isAvailable', '==', true)
     );
     
     const querySnapshot = await getDocs(q);
@@ -251,6 +262,9 @@ export const getCategoryMenuItems = async (
     querySnapshot.forEach((doc) => {
       items.push({ id: doc.id, ...doc.data() } as MenuItem);
     });
+    
+    // Ordenar em memória por 'order'
+    items.sort((a, b) => (a.order || 0) - (b.order || 0));
     
     return items;
   } catch (error) {

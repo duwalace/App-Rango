@@ -9,6 +9,7 @@ import UsersManagement from "./admin/UsersManagement";
 import FinancialManagement from "./admin/FinancialManagement";
 import PlatformSettings from "./admin/PlatformSettings";
 import OperationsSupport from "./admin/OperationsSupport";
+import StoreTypesManagement from "./admin/StoreTypesManagement";
 
 const AdminDashboard = () => {
   const { user, loading } = useAuth();
@@ -42,6 +43,7 @@ const AdminDashboard = () => {
               <Route path="stores" element={<StoresManagement />} />
               <Route path="users" element={<UsersManagement />} />
               <Route path="financial" element={<FinancialManagement />} />
+              <Route path="store-types" element={<StoreTypesManagement />} />
               <Route path="settings" element={<PlatformSettings />} />
               <Route path="support" element={<OperationsSupport />} />
             </Routes>

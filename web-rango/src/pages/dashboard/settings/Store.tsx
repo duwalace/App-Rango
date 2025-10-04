@@ -10,6 +10,7 @@ import { Store, Clock, MapPin, Phone, Mail, Camera, Save } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getStoreById, updateStore } from "@/services/storeService";
 import { useToast } from "@/hooks/use-toast";
+import { CategorySelector } from "@/components/dashboard/CategorySelector";
 
 const StoreSettings = () => {
   const { user } = useAuth();
@@ -44,6 +45,7 @@ const StoreSettings = () => {
   ]);
 
   const [isStoreActive, setIsStoreActive] = useState(true);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   // Carregar dados da loja
   useEffect(() => {
@@ -88,6 +90,11 @@ const StoreSettings = () => {
           }
 
           setIsStoreActive(store.isActive);
+          
+          // Carregar categorias selecionadas
+          if (store.categories && Array.isArray(store.categories)) {
+            setSelectedCategories(store.categories);
+          }
         }
       } catch (error) {
         console.error('❌ Erro ao carregar dados da loja:', error);
@@ -140,6 +147,7 @@ const StoreSettings = () => {
         name: storeData.name.trim(),
         description: storeData.description.trim(),
         category: storeData.category.trim(),
+        categories: selectedCategories, // Array de IDs das categorias
         contact: {
           phone: storeData.phone.trim(),
           email: storeData.email.trim(),
@@ -258,6 +266,14 @@ const StoreSettings = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Selector de Categorias - Span completo */}
+        <div className="lg:col-span-2">
+          <CategorySelector
+            selectedCategories={selectedCategories}
+            onChange={setSelectedCategories}
+          />
+        </div>
 
         {/* Contato */}
         <Card className="shadow-card">

@@ -73,7 +73,7 @@ const menuSections: MenuSection[] = [
     title: "CARDÁPIO",
     items: [
       { title: "Gerenciamento de Itens", icon: UtensilsCrossed, url: "/dashboard/products", badge: null },
-      { title: "Categorias", icon: Grid3X3, url: "/dashboard/menu/categories", badge: null },
+      { title: "Categorias do Cardápio", icon: Grid3X3, url: "/dashboard/menu/categories", badge: null },
       { title: "Complementos e Variações", icon: Plus, url: "/dashboard/menu/complements", badge: null },
       { title: "Disponibilidade de Itens", icon: Eye, url: "/dashboard/menu/availability", badge: null },
       { title: "Controle de Estoque", icon: Archive, url: "/dashboard/menu/inventory", badge: "Novo", isNew: true },
