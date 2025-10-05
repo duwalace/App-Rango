@@ -43,7 +43,7 @@ const StoreScreen: React.FC = () => {
   const scrollY = useRef(new Animated.Value(0)).current;
   
   // Estados
-  const [store, setStore] = useState(mockStore);
+  const [store, setStore] = useState<any>(null);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [highlightDishes, setHighlightDishes] = useState<any[]>([]);
@@ -54,6 +54,39 @@ const StoreScreen: React.FC = () => {
   useEffect(() => {
     console.log('🔵 StoreScreen: Carregando dados da loja:', storeId);
     setLoading(true);
+
+    // Buscar dados da loja
+    const loadStoreData = async () => {
+      try {
+        const { getStoreById } = await import('../services/storeService');
+        const storeData = await getStoreById(storeId);
+        
+        if (storeData) {
+          console.log('✅ StoreScreen: Dados da loja carregados:', storeData.name);
+          setStore({
+            id: storeData.id,
+            name: storeData.name,
+            description: storeData.description,
+            image: storeData.coverImage,
+            logo: storeData.logo,
+            rating: storeData.rating || 4.5,
+            reviewCount: storeData.reviewCount || 0,
+            deliveryTime: storeData.delivery?.deliveryTime || '30-40 min',
+            deliveryFee: storeData.delivery?.deliveryFee || 0,
+            category: storeData.category || 'Restaurante',
+            isFavorite: false,
+          });
+        } else {
+          console.warn('⚠️ Loja não encontrada, usando dados mock');
+          setStore(mockStore);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar loja:', error);
+        setStore(mockStore);
+      }
+    };
+
+    loadStoreData();
 
     // Inscrever-se nas categorias
     const unsubscribeCategories = subscribeToStoreCategories(storeId, (categoriesData) => {
@@ -72,13 +105,25 @@ const StoreScreen: React.FC = () => {
     getPopularItems(storeId).then((popularItems) => {
       console.log('✅ StoreScreen: Itens populares:', popularItems.length);
       // Converter para formato do HighlightDishCard
-      const highlights = popularItems.map(item => ({
-        id: item.id,
-        name: item.name,
-        image: item.image,
-        price: formatPrice(item.price),
-        isBestSeller: item.isPopular,
-      }));
+      const highlights = popularItems.map(item => {
+        // Suportar ambas estruturas
+        const price = (item as any).basePrice || (item as any).price || 0;
+        let image = (item as any).image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop';
+        
+        if ((item as any).images && (item as any).images.length > 0) {
+          const imgObj = (item as any).images[0];
+          image = imgObj.url || imgObj.thumbnailUrl || image;
+        }
+        
+        return {
+          id: item.id,
+          name: item.name,
+          image: image,
+          price: price, // Preço numérico
+          formattedPrice: formatPrice(price), // Preço formatado para exibição
+          isBestSeller: item.isPopular,
+        };
+      });
       setHighlightDishes(highlights);
     }).catch(error => {
       console.error('❌ Erro ao buscar itens populares:', error);
@@ -99,16 +144,32 @@ const StoreScreen: React.FC = () => {
       const sections: MenuSection[] = categories.map(category => {
         const categoryItems = menuItems
           .filter(item => item.categoryId === category.id)
-          .map(item => ({
-            id: item.id,
-            name: item.name,
-            description: item.description,
-            price: formatPrice(item.price),
-            image: item.image,
-            isPromotion: false,
-            isSpicy: false,
-            isVegetarian: false,
-          }));
+          .map(item => {
+            // Suportar ambas estruturas: web-rango (basePrice) e app-rango (price)
+            const price = (item as any).basePrice || (item as any).price || 0;
+            
+            // Suportar ambas estruturas: web-rango (images array) e app-rango (image string)
+            let image = (item as any).image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop';
+            if ((item as any).images && (item as any).images.length > 0) {
+              const imgObj = (item as any).images[0];
+              image = imgObj.url || imgObj.thumbnailUrl || image;
+            }
+            
+            // Descrição pode ser shortDescription ou description
+            const description = (item as any).shortDescription || (item as any).description || '';
+            
+            return {
+              id: item.id,
+              name: item.name,
+              description: description,
+              price: price, // Preço numérico para passar ao ProductScreen
+              formattedPrice: formatPrice(price), // Preço formatado para exibição
+              image: image,
+              isPromotion: (item as any).isPromotion || false,
+              isSpicy: false,
+              isVegetarian: (item as any).dietaryFlags?.includes('vegetarian') || false,
+            };
+          });
 
         return {
           title: category.name,
@@ -195,13 +256,13 @@ const StoreScreen: React.FC = () => {
     />
   );
 
-  // Mostrar loading enquanto carrega
-  if (loading && menuSections.length === 0) {
+  // Mostrar loading enquanto carrega a loja e o cardápio
+  if (!store || (loading && menuSections.length === 0)) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#EA1D2C" />
-          <Text style={styles.loadingText}>Carregando cardápio...</Text>
+          <Text style={styles.loadingText}>Carregando...</Text>
         </View>
       </SafeAreaView>
     );

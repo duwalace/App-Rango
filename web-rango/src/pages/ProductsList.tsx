@@ -3,11 +3,19 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { ItemActionsMenu } from "@/components/ItemActionsMenu";
 import { AvailabilityModal } from "@/components/AvailabilityModal";
-import { Plus, Search, Clock, Loader2, ImageOff } from "lucide-react";
+import { Plus, Search, Clock, Loader2, ImageOff, MoreVertical, Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMenuItems, useStoreCategories, useToggleItemAvailability, useDeleteMenuItem } from "@/hooks/useMenuItems";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const ProductsList = () => {
   const navigate = useNavigate();
@@ -21,6 +29,8 @@ const ProductsList = () => {
 
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   // Filtrar produtos pela busca
   const filteredProducts = menuItems.filter((item) =>
@@ -45,17 +55,30 @@ const ProductsList = () => {
     }
   };
 
+  // Selecionar/desselecionar item
+  const handleSelectItem = (itemId: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  // Selecionar/desselecionar todos
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(filteredProducts.map(item => item.id));
+    }
+    setSelectAll(!selectAll);
+  };
+
   const getStatusBadge = (isAvailable: boolean) => {
     return (
-      <span
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-          isAvailable 
-            ? "bg-green-100 text-green-700" 
-            : "bg-muted text-muted-foreground"
-        }`}
-      >
-        {isAvailable ? "Disponível" : "Indisponível"}
-      </span>
+      <Badge variant={isAvailable ? "success" : "secondary"} className="font-medium">
+        {isAvailable ? "Ativo" : "Inativo"}
+      </Badge>
     );
   };
 
@@ -133,24 +156,56 @@ const ProductsList = () => {
           </Card>
         ) : (
           <>
+            {/* Barra de ações em lote */}
+            {selectedItems.length > 0 && (
+              <div className="mb-4 flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+                <span className="text-sm font-medium">
+                  {selectedItems.length} {selectedItems.length === 1 ? 'item selecionado' : 'itens selecionados'}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    selectedItems.forEach(id => handleToggleAvailability(id, false));
+                    setSelectedItems([]);
+                  }}
+                >
+                  Desativar selecionados
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedItems([])}
+                >
+                  Limpar seleção
+                </Button>
+              </div>
+            )}
+
             <Card className="shadow-card overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground w-12">
-                      
+                    <th className="text-left p-4 w-12">
+                      <Checkbox
+                        checked={selectAll}
+                        onCheckedChange={handleSelectAll}
+                      />
                     </th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">
+                      Imagem
+                    </th>
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">
                       Produto
                     </th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                      Categoria
+                    <th className="text-left p-4 text-sm font-semibold text-foreground">
+                      Status
                     </th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">
+                    <th className="text-right p-4 text-sm font-semibold text-foreground">
                       Preço
                     </th>
-                    <th className="text-center p-4 text-sm font-medium text-muted-foreground">
-                      Status
+                    <th className="text-center p-4 text-sm font-semibold text-foreground">
+                      Código SKU
                     </th>
                     <th className="w-12"></th>
                   </tr>
@@ -159,44 +214,43 @@ const ProductsList = () => {
                   {filteredProducts.map((item) => (
                     <tr
                       key={item.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-smooth"
+                      className="border-b border-border last:border-0 hover:bg-muted/20 transition-all"
                     >
+                      <td className="p-4">
+                        <Checkbox
+                          checked={selectedItems.includes(item.id)}
+                          onCheckedChange={() => handleSelectItem(item.id)}
+                        />
+                      </td>
                       <td className="p-4">
                         {item.images && item.images.length > 0 ? (
                           <img 
                             src={item.images[0].thumbnailUrl} 
                             alt={item.name}
-                            className="w-10 h-10 rounded object-cover"
+                            className="w-16 h-16 rounded-lg object-cover shadow-sm"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
-                            <ImageOff className="h-5 w-5 text-muted-foreground" />
+                          <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                            <ImageOff className="h-8 w-8 text-muted-foreground" />
                           </div>
                         )}
                       </td>
                       <td className="p-4">
                         <div>
-                          <span className="font-medium text-foreground">
+                          <p className="font-semibold text-foreground text-base">
                             {item.name}
-                          </span>
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {getCategoryName(item.categoryId)}
+                          </p>
                           {item.complementGroups && item.complementGroups.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-primary mt-1">
                               {item.complementGroups.length} {item.complementGroups.length === 1 ? 'grupo' : 'grupos'} de complementos
                             </p>
                           )}
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="text-sm text-muted-foreground">
-                          {getCategoryName(item.categoryId)}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <span className="font-medium text-foreground">
-                          R$ {item.basePrice.toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
                         <button
                           onClick={() => handleToggleAvailability(item.id, item.isAvailable)}
                           className="hover:opacity-80 transition-smooth"
@@ -205,13 +259,52 @@ const ProductsList = () => {
                           {getStatusBadge(item.isAvailable)}
                         </button>
                       </td>
+                      <td className="p-4 text-right">
+                        <span className="text-base font-bold text-foreground">
+                          R$ {item.basePrice.toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {item.id.substring(0, 8).toUpperCase()}
+                        </Badge>
+                      </td>
                       <td className="p-4">
-                        <ItemActionsMenu
-                          onEdit={() =>
-                            navigate(`/dashboard/products/edit/${item.id}`)
-                          }
-                          onDelete={() => handleDeleteProduct(item.id)}
-                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/dashboard/products/edit/${item.id}`)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleToggleAvailability(item.id, item.isAvailable)}
+                            >
+                              {item.isAvailable ? (
+                                <>
+                                  <EyeOff className="h-4 w-4 mr-2" />
+                                  Desativar
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Ativar
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteProduct(item.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   ))}

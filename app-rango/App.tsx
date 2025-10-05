@@ -38,6 +38,10 @@ import StoreScreen from './src/Cliente/StoreScreen';
 import ProductScreen from './src/Cliente/ProductScreen';
 import CartScreen from './src/Cliente/CartScreen';
 
+// Telas de Perfil
+import PersonalDataScreen from './src/Cliente/PersonalDataScreen';
+import AddressesScreen from './src/Cliente/AddressesScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -80,15 +84,30 @@ function ProfileStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {usuarioLogado && userRole === 'entregador' ? (
-        <Stack.Screen 
-          name="ProfileMain" 
-          component={DeliveryProfileScreen} 
-        />
+        <>
+          <Stack.Screen 
+            name="ProfileMain" 
+            component={DeliveryProfileScreen} 
+          />
+        </>
       ) : usuarioLogado ? (
-        <Stack.Screen 
-          name="ProfileMain" 
-          component={PerfilLogadoScreen} 
-        />
+        <>
+          <Stack.Screen 
+            name="ProfileMain" 
+            component={ProfileScreen} 
+          />
+          {/* Telas de Perfil do Cliente */}
+          <Stack.Screen name="PersonalData" component={PersonalDataScreen} />
+          <Stack.Screen name="Addresses" component={AddressesScreen} />
+          {/* TODO: Adicionar mais telas */}
+          {/* <Stack.Screen name="AddAddress" component={AddAddressScreen} />
+          <Stack.Screen name="EditAddress" component={EditAddressScreen} />
+          <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+          <Stack.Screen name="AddPayment" component={AddPaymentScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Help" component={HelpScreen} />
+          <Stack.Screen name="About" component={AboutScreen} /> */}
+        </>
       ) : (
         <Stack.Screen 
           name="ProfileMain" 

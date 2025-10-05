@@ -6,7 +6,8 @@ interface MenuItem {
   id: string;
   name: string;
   description: string;
-  price: string;
+  price: string | number;
+  formattedPrice?: string;
   originalPrice?: string;
   image: string;
   isPromotion?: boolean;
@@ -23,6 +24,13 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
   item,
   onPress,
 }) => {
+  const formatPrice = (price: string | number): string => {
+    if (typeof price === 'string') return price;
+    return `R$ ${price.toFixed(2).replace('.', ',')}`;
+  };
+
+  const displayPrice = item.formattedPrice || formatPrice(item.price);
+
   return (
     <TouchableOpacity 
       style={styles.container} 
@@ -57,7 +65,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({
           </Text>
           
           <View style={styles.priceContainer}>
-            <Text style={styles.price}>{item.price}</Text>
+            <Text style={styles.price}>{displayPrice}</Text>
             {item.originalPrice && (
               <Text style={styles.originalPrice}>{item.originalPrice}</Text>
             )}

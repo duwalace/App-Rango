@@ -32,6 +32,7 @@ import ProductCategoryConfig from "./ProductCategoryConfig";
 import ProductComplementsConfig from "./ProductComplementsConfig";
 import ProductComplementsConfigDetailed from "./ProductComplementsConfigDetailed";
 import CreateProduct from "./products/CreateProduct";
+import EditProduct from "./products/EditProduct";
 import MenuCategories from "./dashboard/MenuCategories";
 import MenuComplements from "./dashboard/MenuComplements";
 import MenuAvailability from "./dashboard/MenuAvailability";
@@ -83,6 +84,7 @@ const Dashboard = () => {
               {/* CARDÁPIO */}
               <Route path="products" element={<ProductsList />} />
               <Route path="products/create" element={<CreateProduct />} />
+              <Route path="products/edit/:id" element={<EditProduct />} />
               <Route path="products/new/type" element={<ProductTypeSelection />} />
               <Route path="products/new/category" element={<ProductCategoryConfig />} />
               <Route path="products/new/complements" element={<ProductComplementsConfig />} />

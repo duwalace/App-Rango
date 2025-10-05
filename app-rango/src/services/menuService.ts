@@ -2,7 +2,10 @@ import {
   collection, 
   doc, 
   getDoc, 
-  getDocs, 
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -65,8 +68,12 @@ export const getStoreCategories = async (storeId: string): Promise<MenuCategory[
     const querySnapshot = await getDocs(q);
     const categories: MenuCategory[] = [];
     
+    console.log('   Documentos de categorias retornados:', querySnapshot.size);
+    
     querySnapshot.forEach((doc) => {
-      categories.push({ id: doc.id, ...doc.data() } as MenuCategory);
+      const data = doc.data();
+      console.log(`   Categoria: ${data.name} (ID: ${doc.id})`);
+      categories.push({ id: doc.id, ...data } as MenuCategory);
     });
     
     console.log('✅ Categorias encontradas:', categories.length);
@@ -126,7 +133,9 @@ export const getStoreMenuItems = async (storeId: string): Promise<MenuItem[]> =>
     const items: MenuItem[] = [];
     
     querySnapshot.forEach((doc) => {
-      items.push({ id: doc.id, ...doc.data() } as MenuItem);
+      const data = doc.data();
+      console.log(`   Item encontrado: ${data.name} (categoria: ${data.categoryId})`);
+      items.push({ id: doc.id, ...data } as MenuItem);
     });
     
     console.log('✅ Itens do menu encontrados:', items.length);
@@ -172,31 +181,41 @@ export const getCategoryMenuItems = async (
 
 /**
  * Buscar itens populares de uma loja
+ * Query simplificada - sem índice composto necessário
  */
 export const getPopularItems = async (storeId: string): Promise<MenuItem[]> => {
   try {
     console.log('🔵 Buscando itens populares da loja:', storeId);
     
+    // Query simples - buscar apenas por loja e disponibilidade
     const q = query(
       collection(db, ITEMS_COLLECTION),
       where('storeId', '==', storeId),
-      where('isPopular', '==', true),
-      where('isAvailable', '==', true),
-      orderBy('order', 'asc')
+      where('isAvailable', '==', true)
     );
     
     const querySnapshot = await getDocs(q);
     const items: MenuItem[] = [];
+    const popularItems: MenuItem[] = [];
     
+    // Separar populares e ordenar no código
     querySnapshot.forEach((doc) => {
-      items.push({ id: doc.id, ...doc.data() } as MenuItem);
+      const data = doc.data();
+      const item = { id: doc.id, ...data } as MenuItem;
+      
+      if (data.isPopular === true) {
+        popularItems.push(item);
+      }
     });
     
-    console.log('✅ Itens populares encontrados:', items.length);
-    return items;
+    // Ordenar por order
+    popularItems.sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    console.log('✅ Itens populares encontrados:', popularItems.length);
+    return popularItems;
   } catch (error) {
     console.error('❌ Erro ao buscar itens populares:', error);
-    throw error;
+    return []; // Retornar array vazio em vez de throw
   }
 };
 
@@ -298,32 +317,52 @@ export const getProductsByTag = async (tag: string, limit: number = 10): Promise
 };
 
 /**
- * Buscar produtos populares de todas as lojas para tela inicial
+ * Buscar produtos para tela inicial
+ * Busca TODOS os itens disponíveis, priorizando os populares
  */
-export const getPopularProducts = async (limit: number = 10): Promise<MenuItem[]> => {
+export const getPopularProducts = async (limit: number = 20): Promise<MenuItem[]> => {
   try {
-    console.log('🔵 Buscando produtos populares de todas as lojas');
+    console.log('🔵 Buscando produtos para tela inicial');
+    console.log('   Coleção:', ITEMS_COLLECTION);
     
+    // Primeiro tenta buscar apenas produtos disponíveis (query mais simples)
     const q = query(
       collection(db, ITEMS_COLLECTION),
-      where('isAvailable', '==', true),
-      where('isPopular', '==', true),
-      orderBy('sales', 'desc')
+      where('isAvailable', '==', true)
     );
     
     const querySnapshot = await getDocs(q);
+    console.log('   📦 Total de documentos retornados:', querySnapshot.size);
+    
     const items: MenuItem[] = [];
+    const popularItems: MenuItem[] = [];
+    const regularItems: MenuItem[] = [];
     
     querySnapshot.forEach((doc) => {
-      if (items.length < limit) {
-        items.push({ id: doc.id, ...doc.data() } as MenuItem);
+      const data = doc.data();
+      const item = { id: doc.id, ...data } as MenuItem;
+      
+      // Separar populares de regulares
+      if (data.isPopular === true) {
+        console.log(`   ⭐ Popular: ${data.name}`);
+        popularItems.push(item);
+      } else {
+        console.log(`   📌 Regular: ${data.name}`);
+        regularItems.push(item);
       }
     });
     
-    console.log('✅ Produtos populares encontrados:', items.length);
-    return items;
+    // Priorizar populares, depois adicionar regulares até o limite
+    const allItems = [...popularItems, ...regularItems].slice(0, limit);
+    
+    console.log('✅ Produtos encontrados:');
+    console.log(`   - Populares: ${popularItems.length}`);
+    console.log(`   - Regulares: ${regularItems.length}`);
+    console.log(`   - Total retornado: ${allItems.length}`);
+    
+    return allItems;
   } catch (error) {
-    console.error('❌ Erro ao buscar produtos populares:', error);
+    console.error('❌ Erro ao buscar produtos:', error);
     return [];
   }
 };
@@ -351,4 +390,136 @@ export const formatPreparationTime = (minutes: number): string => {
     return `${hours}h`;
   }
   return `${hours}h ${remainingMinutes}min`;
+};
+
+// ========== CRUD DE CATEGORIAS ==========
+
+/**
+ * Criar uma nova categoria
+ */
+export const createCategory = async (categoryData: {
+  storeId: string;
+  name: string;
+  description: string;
+  image?: string;
+  isActive: boolean;
+  order: number;
+}): Promise<string> => {
+  try {
+    console.log('🔵 Criando categoria:', categoryData.name);
+    
+    const docRef = await addDoc(collection(db, CATEGORIES_COLLECTION), {
+      ...categoryData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    console.log('✅ Categoria criada com ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Erro ao criar categoria:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualizar uma categoria
+ */
+export const updateCategory = async (
+  categoryId: string,
+  updates: Partial<MenuCategory>
+): Promise<void> => {
+  try {
+    const categoryRef = doc(db, CATEGORIES_COLLECTION, categoryId);
+    await updateDoc(categoryRef, {
+      ...updates,
+      updatedAt: new Date()
+    });
+    console.log('✅ Categoria atualizada:', categoryId);
+  } catch (error) {
+    console.error('❌ Erro ao atualizar categoria:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deletar uma categoria
+ */
+export const deleteCategory = async (categoryId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, CATEGORIES_COLLECTION, categoryId));
+    console.log('✅ Categoria deletada:', categoryId);
+  } catch (error) {
+    console.error('❌ Erro ao deletar categoria:', error);
+    throw error;
+  }
+};
+
+// ========== CRUD DE ITENS DO MENU ==========
+
+/**
+ * Criar um novo item do menu
+ */
+export const createMenuItem = async (itemData: {
+  storeId: string;
+  categoryId: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  isAvailable: boolean;
+  isPopular: boolean;
+  preparationTime: number;
+  ingredients?: string[];
+  allergens?: string[];
+  order: number;
+}): Promise<string> => {
+  try {
+    console.log('🔵 Criando item:', itemData.name);
+    
+    const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
+      ...itemData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    console.log('✅ Item criado com ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Erro ao criar item:', error);
+    throw error;
+  }
+};
+
+/**
+ * Atualizar um item do menu
+ */
+export const updateMenuItem = async (
+  itemId: string,
+  updates: Partial<MenuItem>
+): Promise<void> => {
+  try {
+    const itemRef = doc(db, ITEMS_COLLECTION, itemId);
+    await updateDoc(itemRef, {
+      ...updates,
+      updatedAt: new Date()
+    });
+    console.log('✅ Item atualizado:', itemId);
+  } catch (error) {
+    console.error('❌ Erro ao atualizar item:', error);
+    throw error;
+  }
+};
+
+/**
+ * Deletar um item do menu
+ */
+export const deleteMenuItem = async (itemId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, ITEMS_COLLECTION, itemId));
+    console.log('✅ Item deletado:', itemId);
+  } catch (error) {
+    console.error('❌ Erro ao deletar item:', error);
+    throw error;
+  }
 };

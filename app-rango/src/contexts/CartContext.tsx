@@ -104,7 +104,21 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
 
     case 'SET_STORE': {
-      const newState = { ...state, store: action.payload, deliveryFee: action.payload.deliveryFee };
+      // Normalizar deliveryFee para garantir que seja número
+      const normalizedDeliveryFee = typeof action.payload.deliveryFee === 'number' 
+        ? action.payload.deliveryFee 
+        : parseFloat(String(action.payload.deliveryFee).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+      
+      const normalizedStore = {
+        ...action.payload,
+        deliveryFee: normalizedDeliveryFee
+      };
+      
+      const newState = { 
+        ...state, 
+        store: normalizedStore,
+        deliveryFee: normalizedDeliveryFee 
+      };
       return calculateTotals(newState);
     }
 

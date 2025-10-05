@@ -1,77 +1,146 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../contexts/AuthContext';
 
-import ProfileHeader from '../components/ProfileHeader';
-import PromoBanner from '../components/PromoBanner';
-import ProfileListItem from '../components/ProfileListItem';
-import { mainMenuItems, supportMenuItems, promoBannerData } from '../data/profileData';
+type ProfileMenuItem = {
+  id: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  screen: string;
+  color?: string;
+};
 
 const ProfileScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const { usuarioLogado: user, logout } = useAuth();
 
-  const handleLoginPress = () => {
-    navigation.navigate('Auth' as never);
+  const menuItems: ProfileMenuItem[] = [
+    {
+      id: '1',
+      icon: 'person-outline',
+      label: 'Dados pessoais',
+      screen: 'PersonalData',
+    },
+    {
+      id: '2',
+      icon: 'location-outline',
+      label: 'Endereços',
+      screen: 'Addresses',
+    },
+    {
+      id: '3',
+      icon: 'card-outline',
+      label: 'Formas de pagamento',
+      screen: 'PaymentMethods',
+    },
+    {
+      id: '4',
+      icon: 'notifications-outline',
+      label: 'Notificações',
+      screen: 'Notifications',
+    },
+    {
+      id: '5',
+      icon: 'help-circle-outline',
+      label: 'Ajuda',
+      screen: 'Help',
+    },
+    {
+      id: '6',
+      icon: 'information-circle-outline',
+      label: 'Sobre',
+      screen: 'About',
+    },
+  ];
+
+  const handleMenuPress = (screen: string) => {
+    navigation.navigate(screen);
   };
 
-  const handlePromoBannerPress = () => {
-    console.log('Navegar para Comunidade iFood');
-    // Implementar navegação para comunidade
-  };
-
-  const handleMenuItemPress = (screen: string) => {
-    console.log('Navegar para:', screen);
-    // Implementar navegação usando react-navigation
-    // navigation.navigate(screen);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // A navegação para login será tratada pelo AuthContext
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
-      >
-        <View style={styles.mainContainer}>
-          {/* Header do Perfil */}
-          <ProfileHeader onLoginPress={handleLoginPress} />
-          
-          {/* Banner Promocional */}
-          <PromoBanner
-            title={promoBannerData.title}
-            subtitle={promoBannerData.subtitle}
-            imageSource={promoBannerData.imageSource}
-            onPress={handlePromoBannerPress}
-          />
-          
-          {/* Lista Principal de Itens */}
-          <View style={styles.menuSection}>
-            {mainMenuItems.map((item, index) => (
-              <ProfileListItem
-                key={item.screen}
-                iconName={item.icon}
-                text={item.text}
-                onPress={() => handleMenuItemPress(item.screen)}
+      {/* Header com foto do usuário */}
+      <View style={styles.header}>
+        <View style={styles.profileSection}>
+          <View style={styles.avatarContainer}>
+            {user?.photoURL ? (
+              <Image 
+                source={{ uri: user.photoURL }} 
+                style={styles.avatar}
               />
-            ))}
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={40} color="#999" />
+              </View>
+            )}
           </View>
-          
-          {/* Espaçador entre seções */}
-          <View style={styles.sectionSpacer} />
-          
-          {/* Lista de Suporte e Configurações */}
-          <View style={styles.menuSection}>
-            {supportMenuItems.map((item, index) => (
-              <ProfileListItem
-                key={item.screen}
-                iconName={item.icon}
-                text={item.text}
-                onPress={() => handleMenuItemPress(item.screen)}
-              />
-            ))}
+          <View style={styles.profileInfo}>
+            <Text style={styles.greeting}>Olá!</Text>
+            <Text style={styles.email}>{user?.email || 'Usuário'}</Text>
           </View>
         </View>
+      </View>
+
+      {/* Lista de Menu */}
+      <ScrollView 
+        style={styles.menuContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {menuItems.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.menuItem}
+            onPress={() => handleMenuPress(item.screen)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuItemLeft}>
+              <View style={styles.iconContainer}>
+                <Ionicons 
+                  name={item.icon} 
+                  size={24} 
+                  color={item.color || '#666'} 
+                />
+              </View>
+              <Text style={styles.menuItemText}>{item.label}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+        ))}
+
+        {/* Botão de Logout */}
+        <TouchableOpacity
+          style={[styles.menuItem, styles.logoutButton]}
+          onPress={handleLogout}
+          activeOpacity={0.7}
+        >
+          <View style={styles.menuItemLeft}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="log-out-outline" size={24} color="#EA1D2C" />
+            </View>
+            <Text style={[styles.menuItemText, styles.logoutText]}>
+              Sair
+            </Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -82,24 +151,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  scrollView: {
+  header: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 16,
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E0E0E0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInfo: {
     flex: 1,
   },
-  contentContainer: {
-    paddingBottom: 20,
+  greeting: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 4,
   },
-  mainContainer: {
+  email: {
+    fontSize: 14,
+    color: '#666',
+  },
+  menuContainer: {
+    flex: 1,
+    marginTop: 1,
+  },
+  menuItem: {
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  menuSection: {
-    backgroundColor: 'white',
-    marginHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    overflow: 'hidden',
+  iconContainer: {
+    width: 40,
+    alignItems: 'flex-start',
   },
-  sectionSpacer: {
-    height: 16,
+  menuItemText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  logoutButton: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  logoutText: {
+    color: '#EA1D2C',
   },
 });
 

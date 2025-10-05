@@ -29,7 +29,12 @@ const ProductScreen: React.FC = () => {
   const [observations, setObservations] = useState('');
 
   const maxObservations = 140;
-  const unitPrice = parseFloat(product.price.replace('R$ ', '').replace(',', '.'));
+  
+  // Normalizar o preço (pode ser número ou string formatada)
+  const unitPrice = typeof product.price === 'number' 
+    ? product.price 
+    : parseFloat(String(product.price).replace('R$ ', '').replace(',', '.')) || 0;
+  
   const totalPrice = unitPrice * quantity;
 
   const handleIncreaseQuantity = useCallback(() => {
@@ -42,13 +47,21 @@ const ProductScreen: React.FC = () => {
 
   const handleAddToCart = useCallback(() => {
     try {
+      // Normalizar deliveryFee (pode ser número ou string)
+      let normalizedDeliveryFee = 0;
+      if (typeof store.deliveryFee === 'number') {
+        normalizedDeliveryFee = store.deliveryFee;
+      } else if (typeof store.deliveryFee === 'string') {
+        normalizedDeliveryFee = parseFloat(store.deliveryFee.replace('R$ ', '').replace(',', '.')) || 0;
+      }
+
       // Configurar a loja no contexto se ainda não estiver definida
       setStore({
         id: store.id,
         name: store.name,
         logo: store.logo,
         deliveryTime: store.deliveryTime,
-        deliveryFee: parseFloat(store.deliveryFee.replace('R$ ', '').replace(',', '.')),
+        deliveryFee: normalizedDeliveryFee,
       });
 
       // Adicionar item ao carrinho
@@ -111,7 +124,7 @@ const ProductScreen: React.FC = () => {
         <View style={styles.productInfo}>
           <Text style={styles.productName}>{product.name}</Text>
           <Text style={styles.productDescription}>{product.description}</Text>
-          <Text style={styles.productPrice}>{product.price}</Text>
+          <Text style={styles.productPrice}>{formatPrice(unitPrice)}</Text>
         </View>
 
         {/* Observações */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, Text, StyleSheet } from 'react-native';
+import { View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -15,7 +15,6 @@ import {
   mockFilters
 } from '../data/mockData';
 import { subscribeToActiveStores } from '../services/storeService';
-import { getProductsByTag } from '../services/menuService';
 
 type HomeScreenNavigationProp = StackNavigationProp<HomeStackParamList>;
 
@@ -30,12 +29,39 @@ const HomeScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [productsLoading, setProductsLoading] = useState(true);
 
+  // Popular banco automaticamente se vazio
+  const [autoSeedChecked, setAutoSeedChecked] = useState(false);
+
+  // Estados dos filtros
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<'relevancia' | 'distancia' | 'tempo' | 'avaliacao' | 'preco'>('relevancia');
+
   // Carregar lojas ativas do Firebase
   useEffect(() => {
     console.log('🔵 HomeScreen: Carregando lojas ativas do Firebase...');
     
-    const unsubscribe = subscribeToActiveStores((storesData) => {
+    const unsubscribe = subscribeToActiveStores(async (storesData) => {
       console.log('✅ HomeScreen: Lojas recebidas:', storesData.length);
+      
+      // Se não houver lojas e ainda não tentou popular, popular automaticamente
+      if (storesData.length === 0 && !autoSeedChecked) {
+        setAutoSeedChecked(true);
+        console.log('\n' + '='.repeat(50));
+        console.log('⚠️ BANCO VAZIO! Populando automaticamente...');
+        console.log('='.repeat(50));
+        try {
+          const { seedFirebaseData } = await import('../utils/seedFirebase');
+          await seedFirebaseData();
+          console.log('\n' + '='.repeat(50));
+          console.log('✅ BANCO POPULADO COM SUCESSO!');
+          console.log('⏳ Aguardando sincronização...');
+          console.log('='.repeat(50) + '\n');
+          // O listener vai detectar automaticamente as novas lojas
+        } catch (error) {
+          console.error('\n❌ ERRO AO POPULAR BANCO:', error);
+        }
+        return;
+      }
       
       // Converter dados do Firebase para formato do componente
       const formattedStores = storesData.map(store => {
@@ -77,39 +103,82 @@ const HomeScreen: React.FC = () => {
     };
   }, []);
 
-  // Carregar produtos por categoria
+  // Carregar produtos populares (sem necessidade de índices complexos)
   useEffect(() => {
     const loadProducts = async () => {
-      console.log('🔵 HomeScreen: Carregando produtos por categoria...');
+      // Aguardar um pouco para as lojas carregarem primeiro
+      if (loading) return;
+      
+      console.log('🔵 HomeScreen: Carregando produtos populares...');
       setProductsLoading(true);
       
       try {
-        // Buscar produtos de cada categoria em paralelo
-        const [pizzas, marmitas] = await Promise.all([
-          getProductsByTag('pizza', 10),
-          getProductsByTag('marmita', 10),
-        ]);
+        const { getPopularProducts } = await import('../services/menuService');
+        const popularItems = await getPopularProducts(20);
         
-        console.log('✅ Produtos carregados - Pizzas:', pizzas.length, 'Marmitas:', marmitas.length);
+        console.log('✅ Produtos populares carregados:', popularItems.length);
+        
+        if (popularItems.length === 0) {
+          console.log('⚠️ Nenhum produto popular encontrado');
+          setProductsLoading(false);
+          return;
+        }
         
         // Formatar produtos para exibição
-        const formatProduct = (item: any, storeName: string = '') => ({
-          id: item.id,
-          name: item.name,
-          description: item.description || item.shortDescription,
-          basePrice: item.basePrice || item.price || 0,
-          image: item.images && item.images.length > 0 
-            ? item.images[0].url 
-            : item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop',
-          storeId: item.storeId,
-          storeName: storeName,
-          rating: item.rating || 0,
-          isPopular: item.isPopular || false,
-          isFavorite: false,
+        const formattedProducts = popularItems.map((item: any) => {
+          // Suportar AMBAS estruturas: web-rango (basePrice) e app-rango (price)
+          const price = typeof item.basePrice === 'number' 
+            ? item.basePrice 
+            : (typeof item.price === 'number' ? item.price : 0);
+          
+          // Suportar AMBAS estruturas: web-rango (images array) e app-rango (image string)
+          let image = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=300&fit=crop';
+          if (item.image) {
+            // Estrutura simples do app
+            image = item.image;
+          } else if (item.images && item.images.length > 0) {
+            // Estrutura avançada do web (pegar primeira imagem)
+            image = item.images[0].url || item.images[0].thumbnailUrl || image;
+          }
+          
+          // Descrição pode ser shortDescription ou description
+          const description = item.shortDescription || item.description || '';
+          
+          // Log de debug
+          console.log(`📦 Formatando produto: ${item.name}`, {
+            price: price,
+            hasImage: !!image,
+            structure: item.basePrice ? 'web-rango' : 'app-rango'
+          });
+          
+          return {
+            id: item.id,
+            name: item.name || 'Produto sem nome',
+            description: description,
+            basePrice: price, // Enviar como número para o ProductCard formatar
+            image: image,
+            storeId: item.storeId,
+            rating: item.rating || 4.5,
+            isPopular: item.isPopular || false,
+            isFavorite: false,
+          };
         });
         
-        setPizzaProducts(pizzas.map((p: any) => formatProduct(p)));
-        setMarmitaProducts(marmitas.map((m: any) => formatProduct(m)));
+        // Filtrar apenas produtos válidos (com nome e preço)
+        const validProducts = formattedProducts.filter(p => p.name && p.basePrice > 0);
+        
+        console.log('📦 Produtos formatados:', formattedProducts.length);
+        console.log('✅ Produtos válidos:', validProducts.length);
+        
+        if (validProducts.length === 0) {
+          console.warn('⚠️ Nenhum produto válido encontrado!');
+          setProductsLoading(false);
+          return;
+        }
+        
+        // Separar por loja (simplificado)
+        setPizzaProducts(validProducts.slice(0, 5));
+        setMarmitaProducts(validProducts.slice(5, 10));
         
       } catch (error) {
         console.error('❌ Erro ao carregar produtos:', error);
@@ -119,10 +188,78 @@ const HomeScreen: React.FC = () => {
     };
     
     loadProducts();
-  }, []);
+  }, [loading]);
 
   const handleAddressChange = () => {
     navigation.navigate('Address');
+  };
+
+  // Função para filtrar e ordenar lojas
+  const getFilteredStores = () => {
+    let filteredStores = [...stores];
+    
+    // Aplicar filtros
+    activeFilters.forEach(filterId => {
+      switch(filterId) {
+        case '2': // Entrega grátis
+          filteredStores = filteredStores.filter(store => 
+            store.delivery?.deliveryFee === 0 || store.delivery?.deliveryFee === '0'
+          );
+          break;
+        case '3': // Vale-refeição
+          filteredStores = filteredStores.filter(store => 
+            store.paymentOptions?.includes('Ticket') || 
+            store.paymentOptions?.includes('Vale-refeição')
+          );
+          break;
+        case '5': // Entrega rápida (até 30 min)
+          filteredStores = filteredStores.filter(store => {
+            const timeMatch = store.delivery?.deliveryTime?.match(/(\d+)/);
+            return timeMatch && parseInt(timeMatch[0]) <= 30;
+          });
+          break;
+        case '7': // Promoções
+          filteredStores = filteredStores.filter(store => 
+            store.hasPromotions || store.discount > 0
+          );
+          break;
+      }
+    });
+    
+    // Aplicar ordenação
+    switch(sortBy) {
+      case 'avaliacao':
+        filteredStores.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        break;
+      case 'tempo':
+        filteredStores.sort((a, b) => {
+          const timeA = parseInt(a.delivery?.deliveryTime?.match(/(\d+)/)?.[0] || '999');
+          const timeB = parseInt(b.delivery?.deliveryTime?.match(/(\d+)/)?.[0] || '999');
+          return timeA - timeB;
+        });
+        break;
+      case 'preco':
+        filteredStores.sort((a, b) => {
+          const feeA = parseFloat(String(a.delivery?.deliveryFee || 0).replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+          const feeB = parseFloat(String(b.delivery?.deliveryFee || 0).replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+          return feeA - feeB;
+        });
+        break;
+      case 'distancia':
+        // Placeholder para distância (requer geolocalização)
+        break;
+      case 'relevancia':
+      default:
+        // Ordenar por popularidade/rating
+        filteredStores.sort((a, b) => {
+          const scoreA = (a.rating || 0) * (a.reviewCount || 1);
+          const scoreB = (b.rating || 0) * (b.reviewCount || 1);
+          return scoreB - scoreA;
+        });
+        break;
+    }
+    
+    return filteredStores;
   };
 
   const handleCategoryPress = (category: any) => {
@@ -162,6 +299,37 @@ const HomeScreen: React.FC = () => {
 
   const handleFilterPress = (filter: any) => {
     console.log('Filtro selecionado:', filter.label);
+    
+    const filterId = filter.id;
+    
+    // Filtros especiais com ações
+    if (filterId === '1') {
+      // Ordenar - Ciclar entre opções
+      const sortOptions: Array<'relevancia' | 'distancia' | 'tempo' | 'avaliacao' | 'preco'> = 
+        ['relevancia', 'avaliacao', 'tempo', 'preco'];
+      const currentIndex = sortOptions.indexOf(sortBy);
+      const nextSort = sortOptions[(currentIndex + 1) % sortOptions.length];
+      setSortBy(nextSort);
+      
+      const sortLabels = {
+        relevancia: 'Relevância',
+        avaliacao: 'Melhor avaliação',
+        tempo: 'Entrega rápida',
+        preco: 'Menor preço',
+        distancia: 'Distância'
+      };
+      console.log('📊 Ordenando por:', sortLabels[nextSort]);
+      return;
+    }
+    
+    // Toggle outros filtros
+    if (activeFilters.includes(filterId)) {
+      setActiveFilters(activeFilters.filter(f => f !== filterId));
+      console.log('❌ Filtro removido:', filter.label);
+    } else {
+      setActiveFilters([...activeFilters, filterId]);
+      console.log('✅ Filtro adicionado:', filter.label);
+    }
   };
 
   const handlePressRestaurant = (restaurant: any) => {
@@ -210,10 +378,10 @@ const HomeScreen: React.FC = () => {
           </View>
         ) : (
           <>
-            {/* Carrossel de Pizzas - PRODUTOS */}
+            {/* Carrossel de Produtos Populares */}
             {pizzaProducts.length > 0 && (
               <ProductCarousel
-                title="Pizza"
+                title="Mais Pedidos"
                 data={pizzaProducts}
                 onSeeMorePress={handleSeeMorePress}
                 onProductPress={handleProductPress}
@@ -221,10 +389,10 @@ const HomeScreen: React.FC = () => {
               />
             )}
             
-            {/* Carrossel de Marmitas - PRODUTOS */}
+            {/* Carrossel de Destaques */}
             {marmitaProducts.length > 0 && (
               <ProductCarousel
-                title="Marmita"
+                title="Em Destaque"
                 data={marmitaProducts}
                 onSeeMorePress={handleSeeMorePress}
                 onProductPress={handleProductPress}
@@ -249,11 +417,18 @@ const HomeScreen: React.FC = () => {
         <FilterBar 
           filters={mockFilters}
           onFilterPress={handleFilterPress}
+          activeFilters={activeFilters}
+          currentSort={sortBy}
         />
         
         {/* Lista de Restaurantes */}
         <View style={styles.restaurantsList}>
-          <Text style={styles.listTitle}>Todas as lojas</Text>
+          <Text style={styles.listTitle}>
+            Todas as lojas
+            {(activeFilters.length > 0 || sortBy !== 'relevancia') && (
+              <Text style={styles.filterCount}> ({getFilteredStores().length})</Text>
+            )}
+          </Text>
           
           {loading ? (
             <Text style={styles.loadingText}>Carregando...</Text>
@@ -264,12 +439,19 @@ const HomeScreen: React.FC = () => {
                 As lojas aparecerão aqui assim que forem criadas no dashboard
               </Text>
             </View>
+          ) : getFilteredStores().length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyTitle}>Nenhuma loja corresponde aos filtros</Text>
+              <Text style={styles.emptyText}>
+                Tente remover alguns filtros para ver mais opções
+              </Text>
+            </View>
           ) : (
-            stores.map((restaurant, index) => (
+            getFilteredStores().map((restaurant, index) => (
               <RestaurantListItem
                 key={restaurant.id}
                 restaurant={restaurant}
-                onPress={() => handlePressRestaurant(restaurant)}
+                onPressRestaurant={() => handlePressRestaurant(restaurant)}
                 onToggleFavorite={() => handleToggleFavorite(restaurant)}
               />
             ))
@@ -314,6 +496,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 16,
+  },
+  filterCount: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#EA1D2C',
   },
   loadingContainer: {
     paddingVertical: 40,

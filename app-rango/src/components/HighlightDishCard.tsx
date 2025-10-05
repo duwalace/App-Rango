@@ -5,7 +5,8 @@ interface HighlightDish {
   id: string;
   name: string;
   image: string;
-  price: string;
+  price: string | number;
+  formattedPrice?: string;
   originalPrice?: string;
   isPopular?: boolean;
   isBestSeller?: boolean;
@@ -26,6 +27,12 @@ const HighlightDishCard: React.FC<HighlightDishCardProps> = ({
     return null;
   };
 
+  const formatPrice = (price: string | number): string => {
+    if (typeof price === 'string') return price;
+    return `R$ ${price.toFixed(2).replace('.', ',')}`;
+  };
+
+  const displayPrice = dish.formattedPrice || formatPrice(dish.price);
   const tagText = getTagText();
 
   return (
@@ -55,7 +62,7 @@ const HighlightDishCard: React.FC<HighlightDishCardProps> = ({
         </Text>
         
         <View style={styles.priceContainer}>
-          <Text style={styles.price}>{dish.price}</Text>
+          <Text style={styles.price}>{displayPrice}</Text>
           {dish.originalPrice && (
             <Text style={styles.originalPrice}>{dish.originalPrice}</Text>
           )}
