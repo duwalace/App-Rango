@@ -77,12 +77,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     console.log('Estado atual - userRole:', currentUser?.role);
     
     try {
-      // 1. Fazer signOut do Firebase primeiro
+      // 1. Limpar estado local PRIMEIRO (para UI responsiva)
+      console.log('🧼 Limpando estado local...');
+      setCurrentUser(null);
+      
+      // 2. Fazer signOut do Firebase
       console.log('🚪 Chamando signOut do Firebase...');
       await signOut(auth);
       console.log('✅ signOut do Firebase concluído');
       
-      // 2. Limpar AsyncStorage (Firebase auth keys)
+      // 3. Limpar AsyncStorage (Firebase auth keys) - não crítico
       console.log('🧹 Limpando AsyncStorage...');
       try {
         const keys = await AsyncStorage.getAllKeys();
@@ -98,11 +102,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (storageError) {
         console.warn('⚠️ Erro ao limpar AsyncStorage (não crítico):', storageError);
+        // Não interrompe o logout - continua normalmente
       }
-      
-      // 3. Limpar estado local (garantia extra)
-      console.log('🧼 Limpando estado local...');
-      setCurrentUser(null);
       
       console.log('✅ LOGOUT REALIZADO COM SUCESSO!');
       
@@ -110,19 +111,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error('❌ ERRO NO LOGOUT (AuthContext):', error);
       console.error('Mensagem:', error?.message || 'Erro desconhecido');
       
-      // Em caso de erro, limpar estado manualmente
-      console.log('⚠️ Limpando estado manualmente devido ao erro...');
+      // Garantir que o estado seja limpo mesmo com erro
       setCurrentUser(null);
       
-      // Tentar limpar AsyncStorage mesmo com erro
+      // Tentar limpar AsyncStorage mesmo com erro (não crítico)
       try {
         await AsyncStorage.clear();
         console.log('✅ AsyncStorage limpo completamente (fallback)');
       } catch (clearError) {
         console.error('❌ Erro ao limpar AsyncStorage:', clearError);
+        // Ignora erro de storage - não é crítico
       }
       
-      throw error;
+      // NÃO fazer throw - logout deve sempre funcionar
+      console.log('✅ Logout forçado com sucesso (apesar dos erros)');
     }
   };
 

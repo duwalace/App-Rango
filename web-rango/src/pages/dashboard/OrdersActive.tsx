@@ -17,7 +17,11 @@ import {
   TrendingUp,
   Timer,
   AlertTriangle,
-  Bell
+  Bell,
+  CreditCard,
+  Banknote,
+  MessageSquare,
+  Wallet
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { subscribeToActiveStoreOrders, updateOrderStatus } from "@/services/orderService";
@@ -378,6 +382,45 @@ const OrdersActive = () => {
               </div>
             </div>
           )}
+
+          {/* Instruções de Entrega */}
+          {order.deliveryInstructions && (
+            <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-900">
+              <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">Instruções do Cliente:</p>
+                <p className="text-xs text-blue-800 dark:text-blue-200 whitespace-pre-wrap">{order.deliveryInstructions}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Pagamento */}
+          <div className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
+            {order.paymentMethod === 'cash' ? (
+              <Banknote className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+            ) : order.paymentMethod === 'pix' ? (
+              <Wallet className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+            ) : (
+              <CreditCard className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-green-900 dark:text-green-100 mb-0.5">Pagamento:</p>
+              <p className="text-xs text-green-800 dark:text-green-200">
+                {order.paymentMethod === 'cash' && 'Dinheiro'}
+                {order.paymentMethod === 'pix' && 'PIX'}
+                {order.paymentMethod === 'credit_card' && 'Cartão de Crédito'}
+                {order.paymentMethod === 'debit_card' && 'Cartão de Débito'}
+              </p>
+              {order.paymentMethod === 'cash' && order.changeFor && (
+                <p className="text-xs font-bold text-green-700 dark:text-green-300 mt-1">
+                  💵 Troco para: {formatCurrency(order.changeFor)}
+                  <span className="ml-2 text-muted-foreground">
+                    (Levar R$ {(order.changeFor - order.total).toFixed(2).replace('.', ',')} de troco)
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Total e Ações */}
           <div className="flex items-center justify-between pt-3 border-t">

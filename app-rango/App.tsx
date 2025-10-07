@@ -48,6 +48,9 @@ import CheckoutPaymentScreen from './src/Cliente/CheckoutPaymentScreen';
 import CheckoutReviewScreen from './src/Cliente/CheckoutReviewScreen';
 import OrderConfirmationScreen from './src/Cliente/OrderConfirmationScreen';
 
+// Telas de Pedidos
+import OrderDetailsScreen from './src/Cliente/OrderDetailsScreen';
+
 // Telas de Endereço
 import AddAddressScreen from './src/Cliente/AddAddressScreen';
 
@@ -86,6 +89,7 @@ function HomeStack() {
       <Stack.Screen name="CheckoutPayment" component={CheckoutPaymentScreen} />
       <Stack.Screen name="CheckoutReview" component={CheckoutReviewScreen} />
       <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
+      <Stack.Screen name="OrderDetails" component={OrderDetailsScreen} />
       <Stack.Screen name="AddAddress" component={AddAddressScreen} />
     </Stack.Navigator>
   );

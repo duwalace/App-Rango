@@ -77,15 +77,40 @@ const DeliveryProfileScreen = () => {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Sair', 'Deseja realmente sair da sua conta?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair',
-        style: 'destructive',
-        onPress: () => logout(),
-      },
-    ]);
+  const handleLogout = async () => {
+    console.log('🔴 handleLogout chamado');
+    
+    // Verificar se está rodando no navegador (window.confirm existe)
+    const isWeb = typeof window !== 'undefined' && typeof window.confirm === 'function';
+    
+    if (isWeb) {
+      // No navegador web, usar confirmação nativa
+      console.log('🌐 Rodando no navegador, usando window.confirm');
+      const confirmed = window.confirm('Deseja realmente sair da sua conta?');
+      
+      if (confirmed) {
+        console.log('✅ Usuário confirmou logout');
+        await logout();
+        console.log('✅ Logout executado');
+      } else {
+        console.log('❌ Usuário cancelou logout');
+      }
+    } else {
+      // No mobile, usar Alert.alert
+      console.log('📱 Rodando no mobile, usando Alert.alert');
+      Alert.alert('Sair', 'Deseja realmente sair da sua conta?', [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sair',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('✅ Usuário confirmou logout (mobile)');
+            await logout();
+            console.log('✅ Logout executado (mobile)');
+          },
+        },
+      ]);
+    }
   };
 
   const getVehicleLabel = (type: string) => {

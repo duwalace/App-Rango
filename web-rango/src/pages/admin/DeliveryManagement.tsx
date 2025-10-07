@@ -51,7 +51,15 @@ import {
   Phone,
   Mail,
   MapPin,
-  TrendingUp
+  TrendingUp,
+  User,
+  CreditCard,
+  Wallet,
+  Calendar,
+  Car,
+  Building2,
+  IdCard,
+  AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, getDocs, doc, updateDoc, onSnapshot, getDoc, Timestamp } from "firebase/firestore";
@@ -59,37 +67,64 @@ import { db } from "@/lib/firebase";
 
 interface DeliveryPerson {
   id: string;
+  userId: string;
   name: string;
   email: string;
   phone: string;
   cpf: string;
   vehicle: {
     type: 'bike' | 'motorcycle' | 'car';
+    brand?: string;
+    model?: string;
     plate?: string;
+    year?: number;
   };
   documents: {
-    cnh?: string;
-    profilePhoto?: string;
-    vehicleDocument?: string;
+    cnh: {
+      number: string;
+      category: string;
+      expirationDate?: Timestamp;
+      imageUrl?: string;
+    };
+    rg: {
+      number: string;
+      imageUrl?: string;
+    };
+    proofOfAddress?: {
+      imageUrl?: string;
+    };
   };
   address: {
     street: string;
     number: string;
+    complement?: string;
     neighborhood: string;
     city: string;
     state: string;
     zipCode: string;
   };
-  status: 'pending' | 'approved' | 'rejected' | 'blocked';
-  availability: 'online' | 'offline';
+  bankAccount?: {
+    bankName: string;
+    accountType: 'checking' | 'savings';
+    agency: string;
+    accountNumber: string;
+    cpf: string;
+  };
+  status: 'pending' | 'approved' | 'rejected' | 'blocked' | 'suspended';
+  availability: 'online' | 'offline' | 'busy';
+  isActive: boolean;
   stats: {
     totalEarnings: number;
     completedDeliveries: number;
+    totalDeliveries: number;
+    canceledDeliveries: number;
     rating: number;
     reviewCount: number;
   };
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  approvedAt?: Timestamp;
+  rejectedAt?: Timestamp;
   rejectionReason?: string;
 }
 
@@ -628,165 +663,340 @@ export default function DeliveryManagement() {
         ))}
       </Tabs>
 
-      {/* Details Dialog */}
+      {/* Details Dialog - IMPROVED */}
       <Dialog open={detailsDialog} onOpenChange={setDetailsDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes do Entregador</DialogTitle>
-            <DialogDescription>
-              Informações completas e histórico de corridas
-            </DialogDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl">Análise de Cadastro - Entregador</DialogTitle>
+                <DialogDescription>
+                  Verifique todos os dados antes de aprovar ou rejeitar
+                </DialogDescription>
+              </div>
+              {selectedDelivery && (
+                <div className="flex gap-2">
+                  {getStatusBadge(selectedDelivery.status)}
+                  {getAvailabilityBadge(selectedDelivery.availability)}
+                </div>
+              )}
+            </div>
           </DialogHeader>
 
           {selectedDelivery && (
             <div className="space-y-6">
-              {/* Dados Pessoais */}
-              <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Dados Pessoais
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Nome:</span>
-                    <p className="font-medium">{selectedDelivery.name}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">CPF:</span>
-                    <p className="font-medium">{selectedDelivery.cpf}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Email:</span>
-                    <p className="font-medium">{selectedDelivery.email}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Telefone:</span>
-                    <p className="font-medium">{selectedDelivery.phone}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Endereço */}
-              <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Endereço
-                </h3>
-                <p className="text-sm">
-                  {selectedDelivery.address.street}, {selectedDelivery.address.number} - {selectedDelivery.address.neighborhood}
-                  <br />
-                  {selectedDelivery.address.city}/{selectedDelivery.address.state} - CEP: {selectedDelivery.address.zipCode}
-                </p>
-              </div>
-
-              {/* Veículo */}
-              <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <Bike className="h-4 w-4" />
-                  Veículo
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Tipo:</span>
-                    <p className="font-medium">{getVehicleLabel(selectedDelivery.vehicle.type)}</p>
-                  </div>
-                  {selectedDelivery.vehicle.plate && (
-                    <div>
-                      <span className="text-muted-foreground">Placa:</span>
-                      <p className="font-medium">{selectedDelivery.vehicle.plate}</p>
+              {/* Header com Info Rápida */}
+              <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-2">
+                <CardContent className="pt-6">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <User className="h-8 w-8 text-primary" />
+                        <div>
+                          <h3 className="text-2xl font-bold">{selectedDelivery.name}</h3>
+                          <p className="text-sm text-muted-foreground">ID: {selectedDelivery.id.slice(0, 8)}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span>{selectedDelivery.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
+                          <span>{selectedDelivery.phone}</span>
+                        </div>
+                      </div>
                     </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground mb-1">Data de Cadastro</p>
+                      <p className="text-sm font-medium">{formatDate(selectedDelivery.createdAt)}</p>
+                      {selectedDelivery.approvedAt && (
+                        <>
+                          <p className="text-xs text-muted-foreground mt-2 mb-1">Aprovado em</p>
+                          <p className="text-sm font-medium text-green-600">{formatDate(selectedDelivery.approvedAt)}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-2 gap-6">
+                {/* Coluna Esquerda */}
+                <div className="space-y-6">
+                  {/* Dados Pessoais */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <IdCard className="h-5 w-5 text-primary" />
+                        Documentos Pessoais
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">CPF</p>
+                          <p className="font-mono font-semibold text-lg">{selectedDelivery.cpf}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">RG</p>
+                          <p className="font-mono font-semibold text-lg">{selectedDelivery.documents?.rg?.number || 'Não informado'}</p>
+                        </div>
+                      </div>
+                      
+                      {selectedDelivery.documents?.cnh && (
+                        <div className="border-t pt-4">
+                          <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+                            <CreditCard className="h-4 w-4" />
+                            CNH (Habilitação)
+                          </p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Número CNH</p>
+                              <p className="font-mono font-medium">{selectedDelivery.documents.cnh.number}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Categoria</p>
+                              <Badge variant="outline" className="font-bold text-base">
+                                {selectedDelivery.documents.cnh.category}
+                              </Badge>
+                            </div>
+                            {selectedDelivery.documents.cnh.expirationDate && (
+                              <div className="col-span-2">
+                                <p className="text-xs text-muted-foreground mb-1">Validade</p>
+                                <p className="font-medium">{formatDate(selectedDelivery.documents.cnh.expirationDate)}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Endereço */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <MapPin className="h-5 w-5 text-primary" />
+                        Endereço Residencial
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2 text-sm">
+                        <p className="font-medium">
+                          {selectedDelivery.address.street}, {selectedDelivery.address.number}
+                          {selectedDelivery.address.complement && ` - ${selectedDelivery.address.complement}`}
+                        </p>
+                        <p className="text-muted-foreground">{selectedDelivery.address.neighborhood}</p>
+                        <p className="font-medium">{selectedDelivery.address.city}/{selectedDelivery.address.state}</p>
+                        <p className="text-muted-foreground">CEP: {selectedDelivery.address.zipCode}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Dados Bancários */}
+                  {selectedDelivery.bankAccount && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Building2 className="h-5 w-5 text-primary" />
+                          Dados Bancários
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Banco</p>
+                          <p className="font-semibold">{selectedDelivery.bankAccount.bankName}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Agência</p>
+                            <p className="font-mono font-medium">{selectedDelivery.bankAccount.agency}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Conta</p>
+                            <p className="font-mono font-medium">{selectedDelivery.bankAccount.accountNumber}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Tipo de Conta</p>
+                          <Badge variant="secondary">
+                            {selectedDelivery.bankAccount.accountType === 'checking' ? 'Conta Corrente' : 'Conta Poupança'}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
-              </div>
 
-              {/* Estatísticas */}
-              <div>
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Performance
-                </h3>
-                <div className="grid grid-cols-4 gap-4">
+                {/* Coluna Direita */}
+                <div className="space-y-6">
+                  {/* Veículo */}
                   <Card>
-                    <CardContent className="pt-4">
-                      <div className="text-center">
-                        <Package className="h-5 w-5 mx-auto mb-2 text-muted-foreground" />
-                        <div className="text-2xl font-bold">{selectedDelivery.stats?.completedDeliveries || 0}</div>
-                        <p className="text-xs text-muted-foreground">Entregas</p>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Car className="h-5 w-5 text-primary" />
+                        Veículo de Entrega
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-2">Tipo de Veículo</p>
+                        <Badge variant="default" className="text-base px-4 py-2">
+                          {getVehicleLabel(selectedDelivery.vehicle.type)}
+                        </Badge>
+                      </div>
+                      {selectedDelivery.vehicle.plate && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Placa</p>
+                            <p className="font-mono font-bold text-lg">{selectedDelivery.vehicle.plate}</p>
+                          </div>
+                          {selectedDelivery.vehicle.brand && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Marca/Modelo</p>
+                              <p className="font-medium">{selectedDelivery.vehicle.brand} {selectedDelivery.vehicle.model}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Performance Stats */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-primary" />
+                        Performance
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 bg-green-50 dark:bg-green-950/30 rounded-lg">
+                          <Package className="h-6 w-6 mx-auto mb-2 text-green-600" />
+                          <div className="text-2xl font-bold">{selectedDelivery.stats?.completedDeliveries || 0}</div>
+                          <p className="text-xs text-muted-foreground">Entregas Completas</p>
+                        </div>
+                        <div className="text-center p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+                          <DollarSign className="h-6 w-6 mx-auto mb-2 text-blue-600" />
+                          <div className="text-2xl font-bold">R$ {selectedDelivery.stats?.totalEarnings?.toFixed(2) || '0.00'}</div>
+                          <p className="text-xs text-muted-foreground">Total Ganhos</p>
+                        </div>
+                        <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
+                          <Star className="h-6 w-6 mx-auto mb-2 text-yellow-500 fill-yellow-500" />
+                          <div className="text-2xl font-bold">{selectedDelivery.stats?.rating?.toFixed(1) || '0.0'}</div>
+                          <p className="text-xs text-muted-foreground">Avaliação Média</p>
+                        </div>
+                        <div className="text-center p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
+                          <Activity className="h-6 w-6 mx-auto mb-2 text-purple-600" />
+                          <div className="text-2xl font-bold">{selectedDelivery.stats?.reviewCount || 0}</div>
+                          <p className="text-xs text-muted-foreground">Avaliações</p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Histórico Resumido */}
                   <Card>
-                    <CardContent className="pt-4">
-                      <div className="text-center">
-                        <DollarSign className="h-5 w-5 mx-auto mb-2 text-muted-foreground" />
-                        <div className="text-2xl font-bold">R$ {selectedDelivery.stats?.totalEarnings?.toFixed(2) || '0.00'}</div>
-                        <p className="text-xs text-muted-foreground">Ganhos</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4">
-                      <div className="text-center">
-                        <Star className="h-5 w-5 mx-auto mb-2 text-yellow-400 fill-yellow-400" />
-                        <div className="text-2xl font-bold">{selectedDelivery.stats?.rating?.toFixed(1) || '0.0'}</div>
-                        <p className="text-xs text-muted-foreground">Avaliação</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4">
-                      <div className="text-center">
-                        <Activity className="h-5 w-5 mx-auto mb-2 text-muted-foreground" />
-                        <div className="text-2xl font-bold">{selectedDelivery.stats?.reviewCount || 0}</div>
-                        <p className="text-xs text-muted-foreground">Reviews</p>
-                      </div>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Histórico de Corridas ({deliveryTrips.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {deliveryTrips.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Nenhuma corrida registrada ainda
+                        </p>
+                      ) : (
+                        <div className="max-h-48 overflow-y-auto border rounded-md">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs">Data</TableHead>
+                                <TableHead className="text-xs">Loja</TableHead>
+                                <TableHead className="text-xs">Taxa</TableHead>
+                                <TableHead className="text-xs">Status</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {deliveryTrips.slice(0, 10).map((trip) => (
+                                <TableRow key={trip.id}>
+                                  <TableCell className="text-xs">{formatDate(trip.createdAt).split(' ')[0]}</TableCell>
+                                  <TableCell className="text-xs">{trip.storeName.slice(0, 20)}...</TableCell>
+                                  <TableCell className="text-xs font-medium text-green-600">
+                                    R$ {trip.deliveryFee.toFixed(2)}
+                                  </TableCell>
+                                  <TableCell>{getTripStatusBadge(trip.status)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
               </div>
 
-              {/* Histórico de Corridas */}
-              <div>
-                <h3 className="font-semibold mb-3">Histórico de Corridas ({deliveryTrips.length})</h3>
-                {deliveryTrips.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhuma corrida registrada
-                  </p>
-                ) : (
-                  <div className="max-h-60 overflow-y-auto border rounded-md">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Loja</TableHead>
-                          <TableHead>Valor</TableHead>
-                          <TableHead>Taxa</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {deliveryTrips.map((trip) => (
-                          <TableRow key={trip.id}>
-                            <TableCell className="text-sm">{formatDate(trip.createdAt)}</TableCell>
-                            <TableCell className="text-sm">{trip.storeName}</TableCell>
-                            <TableCell className="text-sm">R$ {trip.totalValue.toFixed(2)}</TableCell>
-                            <TableCell className="text-sm font-medium text-green-600">
-                              R$ {trip.deliveryFee.toFixed(2)}
-                            </TableCell>
-                            <TableCell>{getTripStatusBadge(trip.status)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-
-              {/* Status Info */}
+              {/* Alert/Warning Messages */}
               {selectedDelivery.status === 'rejected' && selectedDelivery.rejectionReason && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                  <h4 className="font-semibold text-red-800 mb-1">Motivo da Rejeição</h4>
-                  <p className="text-sm text-red-700">{selectedDelivery.rejectionReason}</p>
+                <Card className="border-red-200 bg-red-50 dark:bg-red-950/30">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-red-800 dark:text-red-400 mb-1">Motivo da Rejeição</h4>
+                        <p className="text-sm text-red-700 dark:text-red-300">{selectedDelivery.rejectionReason}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedDelivery.status === 'pending' && (
+                <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/30">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-3">
+                      <Clock className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-semibold text-yellow-800 dark:text-yellow-400 mb-1">Aguardando Aprovação</h4>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                          Este cadastro precisa ser aprovado antes que o entregador possa começar a trabalhar.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Action Buttons */}
+              {selectedDelivery.status === 'pending' && (
+                <div className="flex gap-3 pt-4 border-t">
+                  <Button
+                    className="flex-1"
+                    variant="default"
+                    size="lg"
+                    onClick={() => {
+                      setDetailsDialog(false);
+                      setActionDialog({ open: true, action: 'approve', delivery: selectedDelivery });
+                    }}
+                  >
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Aprovar Cadastro
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    variant="destructive"
+                    size="lg"
+                    onClick={() => {
+                      setDetailsDialog(false);
+                      setActionDialog({ open: true, action: 'reject', delivery: selectedDelivery });
+                    }}
+                  >
+                    <XCircle className="h-5 w-5 mr-2" />
+                    Rejeitar Cadastro
+                  </Button>
                 </div>
               )}
             </div>

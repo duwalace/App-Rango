@@ -6,20 +6,16 @@ import {
   Text, 
   StyleSheet,
   StatusBar,
-  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { AuthStackParamList } from '../types/navigation';
-import { useAuth } from '../contexts/AuthContext';
 
 import AuthButton from '../components/AuthButton';
 
 const AuthScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<AuthStackParamList>>();
-  const { logout } = useAuth();
 
   const handleBack = () => {
     // Como agora é um modal, sempre podemos voltar para a tela principal
@@ -53,17 +49,6 @@ const AuthScreen: React.FC = () => {
 
   const handleDeliveryLogin = () => {
     navigation.navigate('DeliveryAuth' as never);
-  };
-
-  const handleForceLogout = async () => {
-    try {
-      console.log('�� FORÇANDO LOGOUT DE QUALQUER SESSÃO...');
-      await logout();
-      Alert.alert('✅ Sucesso', 'Sessão limpa com sucesso!');
-    } catch (error) {
-      console.error('❌ Erro ao forçar logout:', error);
-      Alert.alert('Erro', 'Erro ao limpar sessão');
-    }
   };
 
   return (
@@ -131,16 +116,6 @@ const AuthScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Botão de Debug - Forçar Logout (remover em produção) */}
-          <TouchableOpacity 
-            style={styles.debugButton}
-            onPress={handleForceLogout}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="log-out-outline" size={16} color="#999" />
-            <Text style={styles.debugButtonText}>Limpar Sessão</Text>
-          </TouchableOpacity>
         </View>
       </ImageBackground>
     </View>
@@ -213,23 +188,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 8,
-  },
-  debugButton: {
-    marginTop: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 8,
-    backgroundColor: '#F9F9F9',
-  },
-  debugButtonText: {
-    fontSize: 14,
-    color: '#999',
-    fontWeight: '500',
   },
 });
 

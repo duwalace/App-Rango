@@ -15,11 +15,33 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { createDeliveryPerson } from '../services/deliveryService';
 import { useAuth } from '../contexts/AuthContext';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '../services/firebaseConfig';
+import { doc, setDoc } from 'firebase/firestore';
+import {
+  formatCPF,
+  formatPhone,
+  formatCEP,
+  formatPlate,
+  formatDate,
+  formatCNH,
+  formatRG,
+  isValidCPF,
+  isValidPhone,
+  isValidCEP,
+  isValidCNH,
+  isValidDate,
+  isValidEmail,
+  parseDate,
+  onlyNumbers,
+} from '../utils/validators';
+import { buscarCEP } from '../services/cepService';
 
 type AuthStackParamList = {
   AuthMain: undefined;
@@ -36,9 +58,13 @@ const DeliverySignupScreen = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
 
   // Dados pessoais
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [cpf, setCpf] = useState('');
   const [phone, setPhone] = useState('');
 
@@ -69,10 +95,72 @@ const DeliverySignupScreen = () => {
   const [agency, setAgency] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
 
+  // Função para buscar CEP
+  const handleCepChange = async (cep: string) => {
+    const formattedCep = formatCEP(cep);
+    setZipCode(formattedCep);
+
+    // Remove formatação para verificar se tem 8 dígitos
+    const cleanCep = onlyNumbers(formattedCep);
+
+    if (cleanCep.length === 8) {
+      setLoadingCep(true);
+      try {
+        const data = await buscarCEP(cleanCep);
+        
+        if (data && !data.erro) {
+          // Preenche os campos automaticamente
+          setStreet(data.logradouro || '');
+          setNeighborhood(data.bairro || '');
+          setCity(data.localidade || '');
+          setState(data.uf || '');
+          if (data.complemento) {
+            setComplement(data.complemento);
+          }
+          
+          console.log('✅ Endereço preenchido automaticamente');
+        } else {
+          Alert.alert(
+            'CEP não encontrado',
+            'Não foi possível encontrar o endereço. Por favor, preencha manualmente.'
+          );
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+        Alert.alert(
+          'Erro',
+          'Não foi possível buscar o CEP. Verifique sua conexão e tente novamente.'
+        );
+      } finally {
+        setLoadingCep(false);
+      }
+    }
+  };
+
   const handleNextStep = () => {
     if (currentStep === 1) {
-      if (!name || !cpf || !phone) {
+      if (!name || !email || !password || !confirmPassword || !cpf || !phone) {
         Alert.alert('Atenção', 'Preencha todos os campos obrigatórios');
+        return;
+      }
+      if (!isValidEmail(email)) {
+        Alert.alert('Email Inválido', 'Por favor, informe um email válido');
+        return;
+      }
+      if (password.length < 6) {
+        Alert.alert('Senha Fraca', 'A senha deve ter pelo menos 6 caracteres');
+        return;
+      }
+      if (password !== confirmPassword) {
+        Alert.alert('Senhas Diferentes', 'As senhas não coincidem');
+        return;
+      }
+      if (!isValidCPF(cpf)) {
+        Alert.alert('CPF Inválido', 'Por favor, informe um CPF válido');
+        return;
+      }
+      if (!isValidPhone(phone)) {
+        Alert.alert('Telefone Inválido', 'Por favor, informe um telefone válido');
         return;
       }
     } else if (currentStep === 2) {
@@ -80,14 +168,34 @@ const DeliverySignupScreen = () => {
         Alert.alert('Atenção', 'Preencha todos os campos do endereço');
         return;
       }
+      if (!isValidCEP(zipCode)) {
+        Alert.alert('CEP Inválido', 'Por favor, informe um CEP válido');
+        return;
+      }
+      if (state.length !== 2) {
+        Alert.alert('UF Inválida', 'Informe a sigla do estado (ex: SP)');
+        return;
+      }
     } else if (currentStep === 3) {
       if (!cnhNumber || !cnhCategory || !rgNumber) {
         Alert.alert('Atenção', 'Preencha todos os documentos');
         return;
       }
+      if (!isValidCNH(cnhNumber)) {
+        Alert.alert('CNH Inválida', 'A CNH deve ter 11 dígitos');
+        return;
+      }
+      if (cnhExpiration && !isValidDate(cnhExpiration)) {
+        Alert.alert('Data Inválida', 'Informe uma data válida no formato DD/MM/AAAA');
+        return;
+      }
     } else if (currentStep === 4) {
       if (vehicleType !== 'bike' && !vehiclePlate) {
         Alert.alert('Atenção', 'Informe a placa do veículo');
+        return;
+      }
+      if (vehiclePlate && vehiclePlate.replace(/[^A-Z0-9]/g, '').length < 7) {
+        Alert.alert('Placa Inválida', 'Informe uma placa válida');
         return;
       }
     }
@@ -106,66 +214,119 @@ const DeliverySignupScreen = () => {
   };
 
   const handleSubmit = async () => {
-    if (!usuarioLogado?.uid || !usuarioLogado?.email) {
-      Alert.alert('Erro', 'Você precisa estar logado para se cadastrar como entregador');
-      return;
-    }
-
     setLoading(true);
     try {
+      // 1. Criar conta no Firebase Auth
+      console.log('📝 Criando conta no Firebase Auth...');
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('✅ Conta criada:', user.uid);
+
+      // 2. Criar documento do usuário na collection 'users' com role 'entregador'
+      console.log('📝 Criando documento de usuário...');
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        role: 'entregador',
+        createdAt: new Date(),
+      });
+      console.log('✅ Documento de usuário criado');
+
+      // 3. Criar perfil de entregador
+      // Processar data de expiração da CNH
+      let cnhExpirationDate = new Date();
+      cnhExpirationDate.setFullYear(cnhExpirationDate.getFullYear() + 5); // Padrão: 5 anos
+      
+      if (cnhExpiration) {
+        const parsedDate = parseDate(cnhExpiration);
+        if (parsedDate) {
+          cnhExpirationDate = parsedDate;
+        }
+      }
+
+      // Limpar CPF (remover formatação)
+      const cleanedCPF = onlyNumbers(cpf);
+      const cleanedPhone = onlyNumbers(phone);
+      const cleanedZipCode = onlyNumbers(zipCode);
+      const cleanedCNH = onlyNumbers(cnhNumber);
+
+      console.log('📝 Criando perfil de entregador...');
       await createDeliveryPerson({
-        userId: usuarioLogado.uid,
+        userId: user.uid,
         name,
-        email: usuarioLogado.email,
-        phone,
-        cpf,
+        email: user.email!,
+        phone: cleanedPhone,
+        cpf: cleanedCPF,
         address: {
           street,
           number,
           complement,
           neighborhood,
           city,
-          state,
-          zipCode,
+          state: state.toUpperCase(),
+          zipCode: cleanedZipCode,
         },
         documents: {
           cnh: {
-            number: cnhNumber,
-            category: cnhCategory,
-            expirationDate: new Date(cnhExpiration || Date.now() + 365 * 24 * 60 * 60 * 1000),
+            number: cleanedCNH,
+            category: cnhCategory.toUpperCase(),
+            expirationDate: cnhExpirationDate,
           },
           rg: {
-            number: rgNumber,
+            number: onlyNumbers(rgNumber),
           },
         },
         vehicle: {
           type: vehicleType,
           brand: vehicleBrand,
           model: vehicleModel,
-          plate: vehiclePlate,
+          plate: vehiclePlate.toUpperCase(),
         },
         bankAccount: bankName ? {
           bankName,
           accountType,
           agency,
           accountNumber,
-          cpf,
+          cpf: cleanedCPF,
         } : undefined,
       });
 
+      console.log('✅ Perfil de entregador criado');
+
+      // Fazer logout para limpar a sessão
+      await auth.signOut();
+
       Alert.alert(
         'Cadastro Enviado!',
-        'Seu cadastro foi enviado com sucesso e está em análise. Você receberá uma notificação quando for aprovado.',
+        'Sua conta foi criada e seu cadastro está em análise. Você receberá uma notificação quando for aprovado.',
         [
           {
             text: 'OK',
-            onPress: () => navigation.navigate('AuthMain'),
+            onPress: () => {
+              // Voltar para a tela inicial de autenticação
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              }
+            },
           },
         ]
       );
-    } catch (error) {
-      console.error('Erro ao cadastrar:', error);
-      Alert.alert('Erro', 'Não foi possível enviar seu cadastro. Tente novamente.');
+    } catch (error: any) {
+      console.error('❌ Erro ao cadastrar:', error);
+      
+      let errorMessage = 'Não foi possível enviar seu cadastro. Tente novamente.';
+      
+      // Tratar erros específicos do Firebase Auth
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Este email já está cadastrado. Use outro email ou faça login.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Email inválido.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'A senha é muito fraca. Use pelo menos 6 caracteres.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Erro de conexão. Verifique sua internet.';
+      }
+      
+      Alert.alert('Erro', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -188,6 +349,7 @@ const DeliverySignupScreen = () => {
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Dados Pessoais</Text>
+      <Text style={styles.stepSubtitle}>Crie sua conta de entregador</Text>
 
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Nome Completo *</Text>
@@ -201,13 +363,53 @@ const DeliverySignupScreen = () => {
       </View>
 
       <View style={styles.inputGroup}>
+        <Text style={styles.label}>Email *</Text>
+        <TextInput
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          placeholder="seu@email.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Senha *</Text>
+        <TextInput
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Mínimo 6 caracteres"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.label}>Confirmar Senha *</Text>
+        <TextInput
+          style={styles.input}
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          placeholder="Digite a senha novamente"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
         <Text style={styles.label}>CPF *</Text>
         <TextInput
           style={styles.input}
           value={cpf}
-          onChangeText={setCpf}
+          onChangeText={(text) => setCpf(formatCPF(text))}
           placeholder="000.000.000-00"
           keyboardType="numeric"
+          maxLength={14}
         />
       </View>
 
@@ -216,9 +418,10 @@ const DeliverySignupScreen = () => {
         <TextInput
           style={styles.input}
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(text) => setPhone(formatPhone(text))}
           placeholder="(00) 00000-0000"
           keyboardType="phone-pad"
+          maxLength={15}
         />
       </View>
     </View>
@@ -230,13 +433,27 @@ const DeliverySignupScreen = () => {
 
       <View style={styles.inputGroup}>
         <Text style={styles.label}>CEP *</Text>
-        <TextInput
-          style={styles.input}
-          value={zipCode}
-          onChangeText={setZipCode}
-          placeholder="00000-000"
-          keyboardType="numeric"
-        />
+        <View style={styles.cepInputContainer}>
+          <TextInput
+            style={[styles.input, loadingCep && styles.inputDisabled]}
+            value={zipCode}
+            onChangeText={handleCepChange}
+            placeholder="00000-000"
+            keyboardType="numeric"
+            maxLength={9}
+            editable={!loadingCep}
+          />
+          {loadingCep && (
+            <ActivityIndicator 
+              size="small" 
+              color="#FF6B35" 
+              style={styles.cepLoader}
+            />
+          )}
+        </View>
+        {loadingCep && (
+          <Text style={styles.loadingText}>Buscando endereço...</Text>
+        )}
       </View>
 
       <View style={styles.inputGroup}>
@@ -317,9 +534,10 @@ const DeliverySignupScreen = () => {
         <TextInput
           style={styles.input}
           value={cnhNumber}
-          onChangeText={setCnhNumber}
+          onChangeText={(text) => setCnhNumber(formatCNH(text))}
           placeholder="00000000000"
           keyboardType="numeric"
+          maxLength={11}
         />
       </View>
 
@@ -328,9 +546,10 @@ const DeliverySignupScreen = () => {
         <TextInput
           style={styles.input}
           value={cnhCategory}
-          onChangeText={setCnhCategory}
+          onChangeText={(text) => setCnhCategory(text.toUpperCase())}
           placeholder="A, B, AB..."
           autoCapitalize="characters"
+          maxLength={3}
         />
       </View>
 
@@ -339,8 +558,10 @@ const DeliverySignupScreen = () => {
         <TextInput
           style={styles.input}
           value={cnhExpiration}
-          onChangeText={setCnhExpiration}
+          onChangeText={(text) => setCnhExpiration(formatDate(text))}
           placeholder="DD/MM/AAAA"
+          keyboardType="numeric"
+          maxLength={10}
         />
       </View>
 
@@ -349,8 +570,10 @@ const DeliverySignupScreen = () => {
         <TextInput
           style={styles.input}
           value={rgNumber}
-          onChangeText={setRgNumber}
+          onChangeText={(text) => setRgNumber(formatRG(text))}
           placeholder="00.000.000-0"
+          keyboardType="numeric"
+          maxLength={12}
         />
       </View>
 
@@ -419,9 +642,10 @@ const DeliverySignupScreen = () => {
             <TextInput
               style={styles.input}
               value={vehiclePlate}
-              onChangeText={setVehiclePlate}
+              onChangeText={(text) => setVehiclePlate(formatPlate(text))}
               placeholder="ABC-1234"
               autoCapitalize="characters"
+              maxLength={8}
             />
           </View>
 
@@ -519,7 +743,7 @@ const DeliverySignupScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -566,7 +790,7 @@ const DeliverySignupScreen = () => {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -643,6 +867,24 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#333',
+  },
+  cepInputContainer: {
+    position: 'relative',
+  },
+  cepLoader: {
+    position: 'absolute',
+    right: 16,
+    top: 12,
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#FF6B35',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  inputDisabled: {
+    backgroundColor: '#f5f5f5',
+    opacity: 0.7,
   },
   vehicleTypes: {
     flexDirection: 'row',

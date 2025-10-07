@@ -92,6 +92,7 @@ export interface Order {
   total: number;
   status: OrderStatus;
   paymentMethod: PaymentMethod;
+  changeFor?: number; // Valor para troco (quando pagamento em dinheiro)
   deliveryAddress: Address;
   deliveryInstructions?: string;
   estimatedDeliveryTime: Date;
@@ -152,6 +153,69 @@ export interface User {
   avatar?: string;
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface DeliveryPerson {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone: string;
+  cpf: string;
+  vehicle: {
+    type: 'bike' | 'motorcycle' | 'car';
+    brand?: string;
+    model?: string;
+    plate?: string;
+    year?: number;
+  };
+  documents: {
+    cnh: {
+      number: string;
+      category: string;
+      expirationDate?: Date;
+      imageUrl?: string;
+    };
+    rg: {
+      number: string;
+      imageUrl?: string;
+    };
+    proofOfAddress?: {
+      imageUrl?: string;
+    };
+  };
+  address: {
+    street: string;
+    number: string;
+    complement?: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  bankAccount?: {
+    bankName: string;
+    accountType: 'checking' | 'savings';
+    agency: string;
+    accountNumber: string;
+    cpf: string;
+  };
+  status: 'pending' | 'approved' | 'rejected' | 'blocked' | 'suspended';
+  availability: 'online' | 'offline' | 'busy';
+  isActive: boolean;
+  stats: {
+    totalEarnings: number;
+    completedDeliveries: number;
+    totalDeliveries: number;
+    canceledDeliveries: number;
+    rating: number;
+    reviewCount: number;
+  };
+  createdAt: Date;
+  updatedAt: Date;
+  approvedAt?: Date;
+  rejectedAt?: Date;
+  rejectionReason?: string;
 }
 
 // Tipos auxiliares para criação

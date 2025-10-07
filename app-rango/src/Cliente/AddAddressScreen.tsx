@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import { useAuth } from '../contexts/AuthContext';
 import { addAddress } from '../services/addressService';
 import { Address } from '../types/profile';
+import { buscarCEP } from '../services/cepService';
 
 const AddAddressScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -30,6 +31,7 @@ const AddAddressScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [loadingCep, setLoadingCep] = useState(false);
 
   // Dados do endereço
   const [street, setStreet] = useState(prefilledData?.street || '');
@@ -198,6 +200,48 @@ const AddAddressScreen: React.FC = () => {
     );
   };
 
+  // Função para buscar CEP automaticamente
+  const handleCepChange = async (text: string) => {
+    const formattedCep = formatZipCode(text);
+    setZipCode(formattedCep);
+
+    // Remove formatação para verificar se tem 8 dígitos
+    const cleanCep = formattedCep.replace(/\D/g, '');
+
+    if (cleanCep.length === 8) {
+      setLoadingCep(true);
+      try {
+        const data = await buscarCEP(cleanCep);
+        
+        if (data && !data.erro) {
+          // Preenche os campos automaticamente
+          setStreet(data.logradouro || '');
+          setNeighborhood(data.bairro || '');
+          setCity(data.localidade || '');
+          setState(data.uf || '');
+          if (data.complemento) {
+            setComplement(data.complemento);
+          }
+          
+          console.log('✅ Endereço preenchido automaticamente');
+        } else {
+          Alert.alert(
+            'CEP não encontrado',
+            'Não foi possível encontrar o endereço. Por favor, preencha manualmente.'
+          );
+        }
+      } catch (error) {
+        console.error('Erro ao buscar CEP:', error);
+        Alert.alert(
+          'Erro',
+          'Não foi possível buscar o CEP. Verifique sua conexão e tente novamente.'
+        );
+      } finally {
+        setLoadingCep(false);
+      }
+    }
+  };
+
   const handleSearchByCEP = async () => {
     if (zipCode.length < 8) {
       Alert.alert('Atenção', 'Digite um CEP válido');
@@ -206,22 +250,22 @@ const AddAddressScreen: React.FC = () => {
 
     try {
       setLoading(true);
-      // Consultar API ViaCEP
-      const response = await fetch(
-        `https://viacep.com.br/ws/${zipCode.replace(/\D/g, '')}/json/`,
-      );
-      const data = await response.json();
+      // Consultar API ViaCEP usando o serviço
+      const cleanCep = zipCode.replace(/\D/g, '');
+      const data = await buscarCEP(cleanCep);
 
-      if (data.erro) {
+      if (data && !data.erro) {
+        // Preencher campos automaticamente
+        setStreet(data.logradouro || '');
+        setNeighborhood(data.bairro || '');
+        setCity(data.localidade || '');
+        setState(data.uf || '');
+        if (data.complemento) {
+          setComplement(data.complemento);
+        }
+      } else {
         Alert.alert('Erro', 'CEP não encontrado');
-        return;
       }
-
-      // Preencher campos automaticamente
-      setStreet(data.logradouro || '');
-      setNeighborhood(data.bairro || '');
-      setCity(data.localidade || '');
-      setState(data.uf || '');
     } catch (error) {
       Alert.alert('Erro', 'Não foi possível buscar o CEP');
     } finally {
@@ -370,21 +414,31 @@ const AddAddressScreen: React.FC = () => {
               </Text>
               <View style={styles.cepContainer}>
                 <TextInput
-                  style={[styles.input, styles.cepInput]}
+                  style={[styles.input, styles.cepInput, loadingCep && styles.inputDisabled]}
                   placeholder="00000-000"
                   value={zipCode}
-                  onChangeText={(text) => setZipCode(formatZipCode(text))}
+                  onChangeText={handleCepChange}
                   keyboardType="numeric"
                   maxLength={9}
+                  editable={!loadingCep}
                 />
-                <TouchableOpacity
-                  style={styles.cepButton}
-                  onPress={handleSearchByCEP}
-                  disabled={loading}
-                >
-                  <Text style={styles.cepButtonText}>Buscar CEP</Text>
-                </TouchableOpacity>
+                {loadingCep ? (
+                  <View style={styles.cepButton}>
+                    <ActivityIndicator size="small" color="#FF6B35" />
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.cepButton}
+                    onPress={handleSearchByCEP}
+                    disabled={loading}
+                  >
+                    <Text style={styles.cepButtonText}>Buscar</Text>
+                  </TouchableOpacity>
+                )}
               </View>
+              {loadingCep && (
+                <Text style={styles.loadingText}>Buscando endereço...</Text>
+              )}
             </View>
 
             {/* Rua */}
@@ -714,6 +768,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  loadingText: {
+    fontSize: 12,
+    color: '#FF6B35',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  inputDisabled: {
+    backgroundColor: '#f5f5f5',
+    opacity: 0.7,
   },
   labelSelector: {
     flexDirection: 'row',
