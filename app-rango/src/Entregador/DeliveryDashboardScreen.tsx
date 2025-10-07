@@ -6,11 +6,23 @@ import {
   TouchableOpacity,
   Switch,
   ScrollView,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  getDeliveryPerson,
+  updateAvailability,
+  subscribeToDeliveryPerson,
+  DeliveryPerson,
+} from '../services/deliveryService';
+import {
+  subscribeToPendingTrips,
+  Trip,
+} from '../services/tripService';
 
 import DeliveryAlertModal from './DeliveryAlertModal';
 
@@ -18,29 +30,67 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const DeliveryDashboardScreen: React.FC = () => {
   const { usuarioLogado } = useAuth();
+  const navigation = useNavigation();
+  
+  const [loading, setLoading] = useState(true);
+  const [deliveryPerson, setDeliveryPerson] = useState<DeliveryPerson | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [showDeliveryAlert, setShowDeliveryAlert] = useState(false);
-  
-  // Dados simulados de ganhos
-  const [earnings] = useState({
-    today: 45.80,
-    week: 234.50
-  });
+  const [pendingTrips, setPendingTrips] = useState<Trip[]>([]);
+  const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
 
-  // Simular chegada de nova entrega quando online
+  // Carregar dados do entregador
   useEffect(() => {
-    if (isOnline) {
-      const timer = setTimeout(() => {
-        setShowDeliveryAlert(true);
-      }, 5000); // Simula nova entrega após 5 segundos online
-
-      return () => clearTimeout(timer);
+    if (!usuarioLogado?.uid) {
+      setLoading(false);
+      return;
     }
+
+    const unsubscribe = subscribeToDeliveryPerson(
+      usuarioLogado.uid,
+      (person) => {
+        setDeliveryPerson(person);
+        if (person) {
+          setIsOnline(person.availability === 'online');
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [usuarioLogado]);
+
+  // Monitorar corridas pendentes quando online
+  useEffect(() => {
+    if (!isOnline) {
+      setPendingTrips([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToPendingTrips((trips) => {
+      setPendingTrips(trips);
+      
+      // Mostrar alerta se houver nova corrida
+      if (trips.length > 0 && !showDeliveryAlert) {
+        setCurrentTrip(trips[0]);
+        setShowDeliveryAlert(true);
+      }
+    });
+
+    return () => unsubscribe();
   }, [isOnline]);
 
-  const handleStatusChange = (value: boolean) => {
-    setIsOnline(value);
-    console.log('Status do entregador:', value ? 'Online' : 'Offline');
+  const handleStatusChange = async (value: boolean) => {
+    if (!usuarioLogado?.uid) return;
+
+    try {
+      const newAvailability = value ? 'online' : 'offline';
+      await updateAvailability(usuarioLogado.uid, newAvailability);
+      setIsOnline(value);
+      console.log('Status do entregador:', newAvailability);
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+    }
   };
 
   const MapsToWallet = () => {
@@ -48,8 +98,8 @@ const DeliveryDashboardScreen: React.FC = () => {
     navigation.navigate('DeliveryWallet' as never);
   };
 
-  const handleGoOnline = () => {
-    setIsOnline(true);
+  const handleGoOnline = async () => {
+    await handleStatusChange(true);
   };
 
   const formatCurrency = (value: number) => {
@@ -63,7 +113,41 @@ const DeliveryDashboardScreen: React.FC = () => {
     return 'Boa noite';
   };
 
-  const userName = usuarioLogado?.email?.split('@')[0] || 'Entregador';
+  const userName = deliveryPerson?.name || usuarioLogado?.email?.split('@')[0] || 'Entregador';
+
+  // Calcular ganhos do dia e semana
+  const todayEarnings = deliveryPerson?.stats.totalEarnings || 0;
+  const weekEarnings = todayEarnings * 5; // Simplificado
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Se não é entregador aprovado, mostrar mensagem
+  if (!deliveryPerson || deliveryPerson.status !== 'approved') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.pendingContainer}>
+          <Ionicons name="time-outline" size={64} color="#FFA500" />
+          <Text style={styles.pendingTitle}>
+            {!deliveryPerson ? 'Cadastro Pendente' : 'Aguardando Aprovação'}
+          </Text>
+          <Text style={styles.pendingText}>
+            {!deliveryPerson 
+              ? 'Complete seu cadastro para começar a fazer entregas'
+              : 'Seu cadastro está sendo analisado. Você receberá uma notificação quando for aprovado.'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -102,7 +186,7 @@ const DeliveryDashboardScreen: React.FC = () => {
               <Ionicons name="today" size={24} color="#EA1D2C" />
               <Text style={styles.earningLabel}>Ganhos de Hoje</Text>
             </View>
-            <Text style={styles.earningValue}>{formatCurrency(earnings.today)}</Text>
+            <Text style={styles.earningValue}>{formatCurrency(todayEarnings)}</Text>
             <Text style={styles.earningSubtext}>Toque para ver detalhes</Text>
           </TouchableOpacity>
 
@@ -111,7 +195,7 @@ const DeliveryDashboardScreen: React.FC = () => {
               <Ionicons name="calendar" size={24} color="#4CAF50" />
               <Text style={styles.earningLabel}>Ganhos da Semana</Text>
             </View>
-            <Text style={styles.earningValue}>{formatCurrency(earnings.week)}</Text>
+            <Text style={styles.earningValue}>{formatCurrency(weekEarnings)}</Text>
             <Text style={styles.earningSubtext}>Toque para ver detalhes</Text>
           </TouchableOpacity>
         </View>
@@ -153,29 +237,38 @@ const DeliveryDashboardScreen: React.FC = () => {
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Ionicons name="bicycle" size={20} color="#666" />
-            <Text style={styles.statLabel}>Entregas Hoje</Text>
-            <Text style={styles.statValue}>8</Text>
+            <Text style={styles.statLabel}>Total Entregas</Text>
+            <Text style={styles.statValue}>{deliveryPerson.stats.completedDeliveries}</Text>
           </View>
           
           <View style={styles.statItem}>
             <Ionicons name="star" size={20} color="#FFD700" />
             <Text style={styles.statLabel}>Avaliação</Text>
-            <Text style={styles.statValue}>4.9</Text>
+            <Text style={styles.statValue}>
+              {deliveryPerson.stats.rating > 0 ? deliveryPerson.stats.rating.toFixed(1) : '-'}
+            </Text>
           </View>
           
           <View style={styles.statItem}>
-            <Ionicons name="time" size={20} color="#666" />
-            <Text style={styles.statLabel}>Online Hoje</Text>
-            <Text style={styles.statValue}>6h 30m</Text>
+            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+            <Text style={styles.statLabel}>Concluídas</Text>
+            <Text style={styles.statValue}>{deliveryPerson.stats.completedDeliveries}</Text>
           </View>
         </View>
       </ScrollView>
 
       {/* Modal de Alerta de Nova Entrega */}
-      <DeliveryAlertModal
-        visible={showDeliveryAlert}
-        onClose={() => setShowDeliveryAlert(false)}
-      />
+      {currentTrip && (
+        <DeliveryAlertModal
+          visible={showDeliveryAlert}
+          onClose={() => {
+            setShowDeliveryAlert(false);
+            setCurrentTrip(null);
+          }}
+          trip={currentTrip}
+          deliveryPersonId={usuarioLogado?.uid || ''}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -375,6 +468,36 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  pendingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  pendingTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  pendingText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

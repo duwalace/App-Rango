@@ -1,417 +1,540 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+/**
+ * DeliveryProfileScreen.tsx
+ * Perfil completo do entregador
+ * Editar dados pessoais, documentos, configurações
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  FlatList,
+  TextInput,
   Alert,
-  Image
+  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { getDeliveryPerson, updateDeliveryPerson, DeliveryPerson } from '../services/deliveryService';
 import { useAuth } from '../contexts/AuthContext';
 
-interface ProfileMenuItem {
-  id: string;
-  title: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  action: string;
-  showArrow?: boolean;
-}
-
-const DeliveryProfileScreen: React.FC = () => {
-  const navigation = useNavigation();
+const DeliveryProfileScreen = () => {
   const { usuarioLogado, logout } = useAuth();
-  
-  // Dados simulados do perfil do entregador
-  const [profileData] = useState({
-    name: 'Carlos Entregador Silva',
-    deliveryId: 'ENT-2025-001',
-    photo: null, // URL da foto ou null para placeholder
-    rating: 4.9,
-    acceptanceRate: 85,
-    completionRate: 98,
-    totalDeliveries: 1247,
-    memberSince: 'Janeiro 2024'
-  });
 
-  // Itens do menu do perfil
-  const [menuItems] = useState<ProfileMenuItem[]>([
-    {
-      id: '1',
-      title: 'Meus Dados Pessoais',
-      icon: 'person-outline',
-      action: 'PersonalData',
-      showArrow: true
-    },
-    {
-      id: '2',
-      title: 'Informações do Veículo',
-      icon: 'bicycle-outline',
-      action: 'VehicleInfo',
-      showArrow: true
-    },
-    {
-      id: '3',
-      title: 'Meus Documentos',
-      icon: 'document-text-outline',
-      action: 'Documents',
-      showArrow: true
-    },
-    {
-      id: '4',
-      title: 'Central de Ajuda',
-      icon: 'help-circle-outline',
-      action: 'HelpCenter',
-      showArrow: true
-    },
-    {
-      id: '5',
-      title: 'Configurações do App',
-      icon: 'settings-outline',
-      action: 'AppSettings',
-      showArrow: true
-    },
-    {
-      id: '6',
-      title: 'Sair',
-      icon: 'log-out-outline',
-      action: 'Logout',
-      showArrow: false
-    }
-  ]);
+  const [deliveryPerson, setDeliveryPerson] = useState<DeliveryPerson | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Sair da Conta',
-      'Tem certeza que deseja sair da sua conta?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Sair', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🔵 DeliveryProfileScreen: Iniciando logout...');
-              await logout();
-              console.log('✅ DeliveryProfileScreen: Logout realizado com sucesso');
-              // Não precisa navegar - o AuthContext vai detectar e mostrar a tela de login automaticamente
-            } catch (error) {
-              console.error('❌ DeliveryProfileScreen: Erro no logout:', error);
-              Alert.alert('Erro', 'Não foi possível sair da conta. Tente novamente.');
-            }
-          }
-        }
-      ]
-    );
-  };
+  // Estados para edição
+  const [phone, setPhone] = useState('');
+  const [vehiclePlate, setVehiclePlate] = useState('');
 
-  const MapsTo = (destination: string) => {
-    console.log('Navegar para:', destination);
-    
-    switch (destination) {
-      case 'PersonalData':
-        navigation.navigate('DeliveryPersonalData' as never);
-        break;
-      case 'VehicleInfo':
-        navigation.navigate('DeliveryVehicleInfo' as never);
-        break;
-      case 'Documents':
-        navigation.navigate('DeliveryDocuments' as never);
-        break;
-      case 'HelpCenter':
-        navigation.navigate('DeliveryHelpCenter' as never);
-        break;
-      case 'AppSettings':
-        navigation.navigate('DeliveryAppSettings' as never);
-        break;
-      case 'Logout':
-        handleLogout();
-        break;
-      default:
-        Alert.alert('Em Desenvolvimento', 'Esta funcionalidade estará disponível em breve.');
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    if (!usuarioLogado?.uid) return;
+
+    try {
+      const data = await getDeliveryPerson(usuarioLogado.uid);
+      if (data) {
+        setDeliveryPerson(data);
+        setPhone(data.phone || '');
+        setVehiclePlate(data.vehicle?.plate || '');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error);
+      Alert.alert('Erro', 'Não foi possível carregar o perfil');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderStarRating = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
-    
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(
-        <Ionicons key={i} name="star" size={16} color="#FFD700" />
-      );
+  const handleSave = async () => {
+    if (!usuarioLogado?.uid) return;
+
+    setSaving(true);
+    try {
+      await updateDeliveryPerson(usuarioLogado.uid, {
+        phone,
+        vehicle: {
+          ...deliveryPerson?.vehicle,
+          plate: vehiclePlate,
+        },
+      });
+
+      Alert.alert('Sucesso', 'Perfil atualizado com sucesso');
+      setEditing(false);
+      loadProfile();
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      Alert.alert('Erro', 'Não foi possível salvar as alterações');
+    } finally {
+      setSaving(false);
     }
-    
-    if (hasHalfStar) {
-      stars.push(
-        <Ionicons key="half" name="star-half" size={16} color="#FFD700" />
-      );
-    }
-    
-    const emptyStars = 5 - Math.ceil(rating);
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <Ionicons key={`empty-${i}`} name="star-outline" size={16} color="#FFD700" />
-      );
-    }
-    
-    return stars;
   };
 
-  const renderMenuItem = ({ item }: { item: ProfileMenuItem }) => (
-    <TouchableOpacity 
-      style={[
-        styles.menuItem,
-        item.action === 'Logout' && styles.logoutMenuItem
-      ]}
-      onPress={() => MapsTo(item.action)}
-    >
-      <View style={styles.menuItemLeft}>
-        <Ionicons 
-          name={item.icon} 
-          size={24} 
-          color={item.action === 'Logout' ? '#FF5722' : '#666'} 
-        />
-        <Text style={[
-          styles.menuItemText,
-          item.action === 'Logout' && styles.logoutMenuItemText
-        ]}>
-          {item.title}
-        </Text>
+  const handleLogout = () => {
+    Alert.alert('Sair', 'Deseja realmente sair da sua conta?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: () => logout(),
+      },
+    ]);
+  };
+
+  const getVehicleLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      bike: 'Bicicleta',
+      motorcycle: 'Moto',
+      car: 'Carro',
+    };
+    return labels[type] || type;
+  };
+
+  const getStatusBadge = () => {
+    if (!deliveryPerson) return { label: 'Carregando...', color: '#ccc', icon: 'loading' };
+
+    const badges: Record<string, { label: string; color: string; icon: string }> = {
+      pending: { label: 'Aguardando Aprovação', color: '#FF9800', icon: 'clock-alert' },
+      approved: { label: 'Aprovado', color: '#4CAF50', icon: 'check-circle' },
+      rejected: { label: 'Rejeitado', color: '#F44336', icon: 'close-circle' },
+      blocked: { label: 'Bloqueado', color: '#F44336', icon: 'lock' },
+    };
+
+    return badges[deliveryPerson.status] || badges.pending;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF6B35" />
+        <Text style={styles.loadingText}>Carregando perfil...</Text>
       </View>
-      
-      {item.showArrow && (
-        <Ionicons name="chevron-forward" size={16} color="#999" />
-      )}
-    </TouchableOpacity>
-  );
+    );
+  }
+
+  if (!deliveryPerson) {
+    return (
+      <View style={styles.errorContainer}>
+        <Icon name="alert-circle" size={64} color="#ccc" />
+        <Text style={styles.errorText}>Perfil não encontrado</Text>
+      </View>
+    );
+  }
+
+  const statusBadge = getStatusBadge();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <FlatList
-        data={menuItems}
-        renderItem={renderMenuItem}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            {/* Header do Perfil */}
-            <View style={styles.profileHeader}>
-              <View style={styles.photoContainer}>
-                {profileData.photo ? (
-                  <Image source={{ uri: profileData.photo }} style={styles.profilePhoto} />
-                ) : (
-                  <View style={styles.photoPlaceholder}>
-                    <Ionicons name="person" size={40} color="#999" />
-                  </View>
-                )}
-              </View>
-              
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{profileData.name}</Text>
-                <Text style={styles.deliveryId}>ID: {profileData.deliveryId}</Text>
-                <Text style={styles.memberSince}>Membro desde {profileData.memberSince}</Text>
-              </View>
+    <ScrollView style={styles.container}>
+      {/* Header com avatar e status */}
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          {deliveryPerson.documents?.profilePhoto ? (
+            <Icon name="account-circle" size={80} color="#FF6B35" />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>{deliveryPerson.name.charAt(0).toUpperCase()}</Text>
             </View>
+          )}
+        </View>
 
-            {/* Métricas de Desempenho */}
-            <View style={styles.metricsContainer}>
-              <Text style={styles.metricsTitle}>Desempenho</Text>
-              
-              <View style={styles.metricsGrid}>
-                {/* Nota de Avaliação */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <Ionicons name="star" size={20} color="#FFD700" />
-                    <Text style={styles.metricLabel}>Avaliação</Text>
-                  </View>
-                  <Text style={styles.metricValue}>{profileData.rating.toFixed(1)}/5</Text>
-                  <View style={styles.starsContainer}>
-                    {renderStarRating(profileData.rating)}
-                  </View>
-                </View>
+        <Text style={styles.headerName}>{deliveryPerson.name}</Text>
+        <Text style={styles.headerEmail}>{deliveryPerson.email}</Text>
 
-                {/* Taxa de Aceitação */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                    <Text style={styles.metricLabel}>Aceitação</Text>
-                  </View>
-                  <Text style={styles.metricValue}>{profileData.acceptanceRate}%</Text>
-                  <Text style={styles.metricSubtext}>Taxa de aceitação</Text>
-                </View>
+        <View style={[styles.statusBadge, { backgroundColor: statusBadge.color }]}>
+          <Icon name={statusBadge.icon} size={16} color="#fff" />
+          <Text style={styles.statusBadgeText}>{statusBadge.label}</Text>
+        </View>
+      </View>
 
-                {/* Taxa de Conclusão */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <Ionicons name="trophy" size={20} color="#FF9800" />
-                    <Text style={styles.metricLabel}>Conclusão</Text>
-                  </View>
-                  <Text style={styles.metricValue}>{profileData.completionRate}%</Text>
-                  <Text style={styles.metricSubtext}>Taxa de conclusão</Text>
-                </View>
+      {/* Estatísticas */}
+      <View style={styles.statsRow}>
+        <View style={styles.statBox}>
+          <Icon name="star" size={24} color="#FFB300" />
+          <Text style={styles.statValue}>{deliveryPerson.stats?.rating?.toFixed(1) || '0.0'}</Text>
+          <Text style={styles.statLabel}>Avaliação</Text>
+        </View>
 
-                {/* Total de Entregas */}
-                <View style={styles.metricCard}>
-                  <View style={styles.metricHeader}>
-                    <Ionicons name="bicycle" size={20} color="#2196F3" />
-                    <Text style={styles.metricLabel}>Entregas</Text>
-                  </View>
-                  <Text style={styles.metricValue}>{profileData.totalDeliveries.toLocaleString()}</Text>
-                  <Text style={styles.metricSubtext}>Total realizadas</Text>
-                </View>
-              </View>
-            </View>
+        <View style={styles.statBox}>
+          <Icon name="package-variant" size={24} color="#2196F3" />
+          <Text style={styles.statValue}>{deliveryPerson.stats?.completedDeliveries || 0}</Text>
+          <Text style={styles.statLabel}>Entregas</Text>
+        </View>
 
-            {/* Título da Lista de Opções */}
-            <Text style={styles.menuTitle}>Configurações</Text>
+        <View style={styles.statBox}>
+          <Icon name="cash" size={24} color="#4CAF50" />
+          <Text style={styles.statValue}>R$ {deliveryPerson.stats?.totalEarnings?.toFixed(0) || 0}</Text>
+          <Text style={styles.statLabel}>Ganhos</Text>
+        </View>
+      </View>
+
+      {/* Informações Pessoais */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Informações Pessoais</Text>
+          {!editing && (
+            <TouchableOpacity onPress={() => setEditing(true)}>
+              <Icon name="pencil" size={20} color="#FF6B35" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.infoRow}>
+          <Icon name="card-account-details" size={20} color="#666" />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>CPF</Text>
+            <Text style={styles.infoValue}>{deliveryPerson.cpf}</Text>
           </View>
-        }
-        contentContainerStyle={styles.scrollContent}
-      />
-    </SafeAreaView>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Icon name="phone" size={20} color="#666" />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Telefone</Text>
+            {editing ? (
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="(00) 00000-0000"
+                keyboardType="phone-pad"
+              />
+            ) : (
+              <Text style={styles.infoValue}>{deliveryPerson.phone}</Text>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Icon name="map-marker" size={20} color="#666" />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Endereço</Text>
+            <Text style={styles.infoValue}>
+              {deliveryPerson.address.street}, {deliveryPerson.address.number}
+            </Text>
+            <Text style={styles.infoValueSecondary}>
+              {deliveryPerson.address.neighborhood}, {deliveryPerson.address.city}/{deliveryPerson.address.state}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Veículo */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Veículo</Text>
+
+        <View style={styles.infoRow}>
+          <Icon name="bike" size={20} color="#666" />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Tipo</Text>
+            <Text style={styles.infoValue}>{getVehicleLabel(deliveryPerson.vehicle.type)}</Text>
+          </View>
+        </View>
+
+        {deliveryPerson.vehicle.type !== 'bike' && (
+          <View style={styles.infoRow}>
+            <Icon name="card-text" size={20} color="#666" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Placa</Text>
+              {editing ? (
+                <TextInput
+                  style={styles.input}
+                  value={vehiclePlate}
+                  onChangeText={setVehiclePlate}
+                  placeholder="ABC-1234"
+                  autoCapitalize="characters"
+                />
+              ) : (
+                <Text style={styles.infoValue}>{deliveryPerson.vehicle.plate || 'Não informado'}</Text>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Botões de ação */}
+      {editing && (
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={[styles.button, styles.buttonSecondary]}
+            onPress={() => {
+              setEditing(false);
+              setPhone(deliveryPerson.phone || '');
+              setVehiclePlate(deliveryPerson.vehicle?.plate || '');
+            }}
+          >
+            <Text style={styles.buttonSecondaryText}>Cancelar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.buttonPrimary, saving && styles.buttonDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.buttonPrimaryText}>Salvar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Configurações */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Configurações</Text>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Icon name="bell" size={22} color="#666" />
+          <Text style={styles.menuItemText}>Notificações</Text>
+          <Icon name="chevron-right" size={22} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Icon name="help-circle" size={22} color="#666" />
+          <Text style={styles.menuItemText}>Ajuda e Suporte</Text>
+          <Icon name="chevron-right" size={22} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Icon name="file-document" size={22} color="#666" />
+          <Text style={styles.menuItemText}>Termos de Uso</Text>
+          <Icon name="chevron-right" size={22} color="#ccc" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuItem}>
+          <Icon name="shield-check" size={22} color="#666" />
+          <Text style={styles.menuItemText}>Política de Privacidade</Text>
+          <Icon name="chevron-right" size={22} color="#ccc" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Botão de Logout */}
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Icon name="logout" size={22} color="#F44336" />
+        <Text style={styles.logoutButtonText}>Sair da Conta</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#f5f5f5',
   },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  profileHeader: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  photoContainer: {
-    marginRight: 15,
-  },
-  profilePhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  photoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F0F0F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileInfo: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '700',
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    paddingVertical: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  avatarContainer: {
+    marginBottom: 16,
+  },
+  avatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FF6B35',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  headerName: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
-  deliveryId: {
+  headerEmail: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 2,
-  },
-  memberSince: {
-    fontSize: 12,
-    color: '#999',
-  },
-  metricsContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    marginTop: 10,
-  },
-  metricsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  metricCard: {
-    width: '48%',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 15,
     marginBottom: 12,
-    alignItems: 'center',
   },
-  metricHeader: {
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
   },
-  metricLabel: {
+  statusBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginTop: 12,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  statLabel: {
     fontSize: 12,
     color: '#666',
-    marginLeft: 5,
-    fontWeight: '500',
+    marginTop: 4,
   },
-  metricValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 4,
+  section: {
+    backgroundColor: '#fff',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
-  metricSubtext: {
-    fontSize: 10,
-    color: '#999',
-    textAlign: 'center',
-  },
-  starsContainer: {
+  sectionHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
   },
-  menuTitle: {
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginTop: 20,
-    marginBottom: 15,
-    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  menuItem: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  infoRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#f0f0f0',
+    gap: 12,
   },
-  logoutMenuItem: {
-    borderBottomWidth: 0,
-    marginTop: 10,
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  infoContent: {
     flex: 1,
   },
-  menuItemText: {
+  infoLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  infoValue: {
     fontSize: 16,
     color: '#333',
-    marginLeft: 15,
-    fontWeight: '500',
   },
-  logoutMenuItemText: {
-    color: '#FF5722',
+  infoValueSecondary: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  input: {
+    fontSize: 16,
+    color: '#333',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FF6B35',
+    paddingVertical: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginTop: 16,
+    gap: 12,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  buttonPrimary: {
+    backgroundColor: '#FF6B35',
+  },
+  buttonPrimaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  buttonSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  buttonSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    gap: 12,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#F44336',
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F44336',
   },
 });
 

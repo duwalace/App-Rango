@@ -301,13 +301,34 @@ export default function Profile() {
               />
             </div>
             <div>
-              <Label htmlFor="storeCategory">Categoria</Label>
-              <Input
+              <Label htmlFor="storeCategory">Categoria *</Label>
+              <select
                 id="storeCategory"
                 value={storeForm.category}
                 onChange={(e) => setStoreForm({ ...storeForm, category: e.target.value })}
-                placeholder="Ex: Restaurante, Lanchonete, Pizzaria"
-              />
+                className="w-full h-10 px-3 border rounded-md bg-white border-gray-300"
+              >
+                <option value="">Selecione uma categoria</option>
+                <option value="Restaurantes">Restaurantes</option>
+                <option value="Mercado">Mercado</option>
+                <option value="Bebidas">Bebidas</option>
+                <option value="Farmácia">Farmácia</option>
+                <option value="Pet Shop">Pet Shop</option>
+                <option value="Shopping">Shopping</option>
+                <optgroup label="Subcategorias de Restaurantes">
+                  <option value="Pizzaria">Pizzaria</option>
+                  <option value="Hamburgueria">Hamburgueria</option>
+                  <option value="Japonês">Japonês</option>
+                  <option value="Italiana">Italiana</option>
+                  <option value="Brasileira">Brasileira</option>
+                  <option value="Lanches">Lanches</option>
+                  <option value="Saudável">Saudável</option>
+                  <option value="Açaí">Açaí</option>
+                  <option value="Sobremesas">Sobremesas</option>
+                  <option value="Padaria">Padaria</option>
+                  <option value="Cafeteria">Cafeteria</option>
+                </optgroup>
+              </select>
             </div>
             <div>
               <Label htmlFor="storeLogo">URL do Logo</Label>

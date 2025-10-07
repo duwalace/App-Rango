@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,43 +39,72 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Ticket,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-interface Promotion {
-  id: string;
-  name: string;
-  description: string;
-  type: 'percentage' | 'fixed' | 'free_shipping' | 'buy_x_get_y';
-  value: number;
-  minOrderValue?: number;
-  startDate: Date;
-  endDate: Date;
-  isActive: boolean;
-  status: 'scheduled' | 'active' | 'expired';
-  usageCount: number;
-  usageLimit?: number;
-  categories?: string[];
-}
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  getStorePromotions,
+  createPromotion,
+  updatePromotion,
+  deletePromotion,
+  togglePromotionStatus,
+  generateCouponCode,
+  type Promotion,
+  type PromotionType,
+} from '@/services/promotionService';
 
 const Promotions = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
 
   const [newPromotion, setNewPromotion] = useState({
     name: '',
     description: '',
-    type: 'percentage' as Promotion['type'],
-    value: 0,
+    type: 'percentage' as PromotionType,
+    code: '',
+    discountValue: 0,
     minOrderValue: 0,
+    maxDiscount: 0,
+    buyQuantity: 2,
+    getQuantity: 1,
     startDate: '',
     endDate: '',
     usageLimit: 0,
-    categories: [] as string[],
+    userLimit: 1,
   });
 
-  const [promotions] = useState<Promotion[]>([
+  // Carregar promoções
+  useEffect(() => {
+    if (user?.storeId) {
+      loadPromotions();
+    }
+  }, [user]);
+
+  const loadPromotions = async () => {
+    if (!user?.storeId) return;
+
+    try {
+      setLoading(true);
+      const data = await getStorePromotions(user.storeId);
+      setPromotions(data);
+    } catch (error) {
+      console.error('Erro ao carregar promoções:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível carregar as promoções',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const [_mockPromotions] = useState<any[]>([
     {
       id: '1',
       name: 'Black Friday 2024',
@@ -143,7 +172,7 @@ const Promotions = () => {
     conversionRate: 23.5,
   };
 
-  const handleCreatePromotion = () => {
+  const handleCreatePromotion = async () => {
     if (!newPromotion.name || !newPromotion.startDate || !newPromotion.endDate) {
       toast({
         title: 'Campos obrigatórios',
@@ -153,58 +182,127 @@ const Promotions = () => {
       return;
     }
 
-    toast({
-      title: '✅ Promoção criada!',
-      description: `${newPromotion.name} foi criada com sucesso`,
-    });
+    if (!user?.storeId || !user?.uid) {
+      toast({
+        title: 'Erro',
+        description: 'Usuário não autenticado',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-    setShowCreateModal(false);
-    setNewPromotion({
-      name: '',
-      description: '',
-      type: 'percentage',
-      value: 0,
-      minOrderValue: 0,
-      startDate: '',
-      endDate: '',
-      usageLimit: 0,
-      categories: [],
-    });
+    try {
+      await createPromotion({
+        storeId: user.storeId,
+        name: newPromotion.name,
+        description: newPromotion.description,
+        type: newPromotion.type,
+        code: newPromotion.code || undefined,
+        discountValue: newPromotion.discountValue,
+        minOrderValue: newPromotion.minOrderValue || undefined,
+        maxDiscount: newPromotion.maxDiscount || undefined,
+        buyQuantity: newPromotion.buyQuantity,
+        getQuantity: newPromotion.getQuantity,
+        startDate: new Date(newPromotion.startDate),
+        endDate: new Date(newPromotion.endDate),
+        usageLimit: newPromotion.usageLimit || undefined,
+        userLimit: newPromotion.userLimit,
+        createdBy: user.uid,
+      });
+
+      toast({
+        title: '✅ Promoção criada!',
+        description: `${newPromotion.name} foi criada com sucesso`,
+      });
+
+      loadPromotions();
+      setShowCreateModal(false);
+      setNewPromotion({
+        name: '',
+        description: '',
+        type: 'percentage',
+        code: '',
+        discountValue: 0,
+        minOrderValue: 0,
+        maxDiscount: 0,
+        buyQuantity: 2,
+        getQuantity: 1,
+        startDate: '',
+        endDate: '',
+        usageLimit: 0,
+        userLimit: 1,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: error.message || 'Não foi possível criar a promoção',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleTogglePromotion = (id: string) => {
-    toast({
-      title: '✅ Status atualizado',
-      description: 'Promoção foi ativada/desativada',
-    });
+  const handleTogglePromotion = async (id: string, currentStatus: boolean) => {
+    try {
+      await togglePromotionStatus(id, !currentStatus);
+      toast({
+        title: '✅ Status atualizado',
+        description: `Promoção ${!currentStatus ? 'ativada' : 'desativada'} com sucesso`,
+      });
+      loadPromotions();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível atualizar o status',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleDeletePromotion = (id: string) => {
-    toast({
-      title: '✅ Promoção excluída',
-      description: 'A promoção foi removida',
-    });
+  const handleDeletePromotion = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta promoção?')) {
+      return;
+    }
+
+    try {
+      await deletePromotion(id);
+      toast({
+        title: '✅ Promoção excluída',
+        description: 'A promoção foi removida com sucesso',
+      });
+      loadPromotions();
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível excluir a promoção',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const getTypeIcon = (type: Promotion['type']) => {
+  const handleGenerateCode = () => {
+    const code = generateCouponCode(newPromotion.name.substring(0, 3));
+    setNewPromotion({ ...newPromotion, code });
+  };
+
+  const getTypeIcon = (type: PromotionType) => {
     switch (type) {
       case 'percentage':
         return <Percent className="h-4 w-4" />;
       case 'fixed':
         return <DollarSign className="h-4 w-4" />;
-      case 'free_shipping':
+      case 'freeDelivery':
         return <Truck className="h-4 w-4" />;
-      case 'buy_x_get_y':
+      case 'buyXgetY':
         return <Gift className="h-4 w-4" />;
     }
   };
 
-  const getTypeLabel = (type: Promotion['type']) => {
+  const getTypeLabel = (type: PromotionType) => {
     const labels = {
       percentage: 'Desconto %',
       fixed: 'Desconto Fixo',
-      free_shipping: 'Frete Grátis',
-      buy_x_get_y: 'Compre X Leve Y',
+      freeDelivery: 'Frete Grátis',
+      buyXgetY: 'Compre X Leve Y',
     };
     return labels[type];
   };
@@ -238,13 +336,13 @@ const Promotions = () => {
   const getPromotionValue = (promo: Promotion) => {
     switch (promo.type) {
       case 'percentage':
-        return `${promo.value}% OFF`;
+        return `${promo.discountValue}% OFF`;
       case 'fixed':
-        return `R$ ${promo.value.toFixed(2)} OFF`;
-      case 'free_shipping':
+        return `R$ ${(promo.discountValue || 0).toFixed(2)} OFF`;
+      case 'freeDelivery':
         return 'Frete Grátis';
-      case 'buy_x_get_y':
-        return `Compre ${promo.value} Leve ${promo.value + 1}`;
+      case 'buyXgetY':
+        return `Leve ${promo.buyQuantity} Pague ${(promo.buyQuantity || 0) - (promo.getQuantity || 0)}`;
     }
   };
 
@@ -330,7 +428,23 @@ const Promotions = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {promotions.map((promotion) => (
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+              <p className="text-gray-500">Carregando promoções...</p>
+            </div>
+          ) : promotions.length === 0 ? (
+            <div className="text-center py-12">
+              <Sparkles className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg font-medium">
+                Nenhuma promoção criada ainda
+              </p>
+              <p className="text-gray-400 text-sm mt-1">
+                Crie sua primeira promoção para atrair mais clientes
+              </p>
+            </div>
+          ) : (
+            promotions.map((promotion) => (
             <div
               key={promotion.id}
               className="p-6 border-2 rounded-lg hover:shadow-md transition-shadow space-y-4"
@@ -355,11 +469,30 @@ const Promotions = () => {
                   {getStatusBadge(promotion.status)}
                   <Switch
                     checked={promotion.isActive}
-                    onCheckedChange={() => handleTogglePromotion(promotion.id)}
+                    onCheckedChange={() => handleTogglePromotion(promotion.id, promotion.isActive)}
                     disabled={promotion.status === 'expired'}
                   />
                 </div>
               </div>
+
+              {/* Código do Cupom */}
+              {promotion.code && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200">
+                  <Ticket className="h-4 w-4 text-blue-600" />
+                  <span className="font-mono font-bold text-blue-600">{promotion.code}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => {
+                      navigator.clipboard.writeText(promotion.code!);
+                      toast({ title: 'Código copiado!' });
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
 
               {/* Detalhes da Promoção */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
@@ -401,11 +534,8 @@ const Promotions = () => {
                   {promotion.minOrderValue && (
                     <span>Pedido mín: R$ {promotion.minOrderValue.toFixed(2)}</span>
                   )}
-                  {promotion.categories && promotion.categories.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Tag className="h-3 w-3" />
-                      <span>{promotion.categories.join(', ')}</span>
-                    </div>
+                  {promotion.maxDiscount && promotion.type === 'percentage' && (
+                    <span>Máx: R$ {promotion.maxDiscount.toFixed(2)}</span>
                   )}
                 </div>
 
@@ -434,7 +564,8 @@ const Promotions = () => {
                 </div>
               </div>
             </div>
-          ))}
+          ))
+        )}
         </CardContent>
       </Card>
 
@@ -475,6 +606,31 @@ const Promotions = () => {
                   rows={2}
                 />
               </div>
+
+              {/* Código do Cupom */}
+              <div>
+                <Label>Código do Cupom (opcional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newPromotion.code}
+                    onChange={(e) =>
+                      setNewPromotion({ ...newPromotion, code: e.target.value.toUpperCase() })
+                    }
+                    placeholder="Ex: BLACKFRIDAY"
+                    maxLength={15}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateCode}
+                  >
+                    Gerar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Deixe em branco para promoção automática (sem cupom)
+                </p>
+              </div>
             </div>
 
             {/* Tipo e Valor */}
@@ -503,43 +659,78 @@ const Promotions = () => {
                         Desconto Fixo (R$)
                       </div>
                     </SelectItem>
-                    <SelectItem value="free_shipping">
+                    <SelectItem value="freeDelivery">
                       <div className="flex items-center gap-2">
                         <Truck className="h-4 w-4" />
                         Frete Grátis
                       </div>
                     </SelectItem>
-                    <SelectItem value="buy_x_get_y">
+                    <SelectItem value="buyXgetY">
                       <div className="flex items-center gap-2">
                         <Gift className="h-4 w-4" />
-                        Compre X Leve Y
+                        Leve X Pague Y
                       </div>
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {newPromotion.type !== 'free_shipping' && (
+              {newPromotion.type !== 'freeDelivery' && newPromotion.type !== 'buyXgetY' && (
                 <div>
                   <Label>
-                    Valor *{' '}
+                    Valor do Desconto *{' '}
                     {newPromotion.type === 'percentage' && '(%)'}
                     {newPromotion.type === 'fixed' && '(R$)'}
                   </Label>
                   <Input
                     type="number"
-                    value={newPromotion.value}
+                    value={newPromotion.discountValue}
                     onChange={(e) =>
                       setNewPromotion({
                         ...newPromotion,
-                        value: parseFloat(e.target.value),
+                        discountValue: parseFloat(e.target.value),
                       })
                     }
                     placeholder="0"
+                    step={newPromotion.type === 'percentage' ? '1' : '0.01'}
                   />
                 </div>
               )}
             </div>
+
+            {/* Buy X Get Y */}
+            {newPromotion.type === 'buyXgetY' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Quantidade para Comprar *</Label>
+                  <Input
+                    type="number"
+                    value={newPromotion.buyQuantity}
+                    onChange={(e) =>
+                      setNewPromotion({
+                        ...newPromotion,
+                        buyQuantity: parseInt(e.target.value),
+                      })
+                    }
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <Label>Quantidade Grátis *</Label>
+                  <Input
+                    type="number"
+                    value={newPromotion.getQuantity}
+                    onChange={(e) =>
+                      setNewPromotion({
+                        ...newPromotion,
+                        getQuantity: parseInt(e.target.value),
+                      })
+                    }
+                    min="1"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Período */}
             <div className="grid grid-cols-2 gap-4">
@@ -567,7 +758,7 @@ const Promotions = () => {
             </div>
 
             {/* Regras */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Pedido Mínimo (R$)</Label>
                 <Input
@@ -580,11 +771,30 @@ const Promotions = () => {
                     })
                   }
                   placeholder="0.00"
+                  step="0.01"
                 />
               </div>
 
+              {newPromotion.type === 'percentage' && (
+                <div>
+                  <Label>Desconto Máximo (R$)</Label>
+                  <Input
+                    type="number"
+                    value={newPromotion.maxDiscount}
+                    onChange={(e) =>
+                      setNewPromotion({
+                        ...newPromotion,
+                        maxDiscount: parseFloat(e.target.value),
+                      })
+                    }
+                    placeholder="Ilimitado"
+                    step="0.01"
+                  />
+                </div>
+              )}
+
               <div>
-                <Label>Limite de Uso</Label>
+                <Label>Limite Total de Uso</Label>
                 <Input
                   type="number"
                   value={newPromotion.usageLimit}

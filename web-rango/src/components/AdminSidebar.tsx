@@ -9,7 +9,8 @@ import {
   Headphones,
   ChevronLeft,
   Crown,
-  Tag
+  Tag,
+  Bike
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useSidebar } from "./ui/sidebar";
@@ -29,6 +30,11 @@ const adminMenuItems = [
     title: "Gestão de Usuários",
     icon: Users,
     href: "/admin/users",
+  },
+  {
+    title: "Gestão de Entregadores",
+    icon: Bike,
+    href: "/admin/delivery",
   },
   {
     title: "Financeiro Global",

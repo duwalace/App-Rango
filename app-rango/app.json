@@ -14,7 +14,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "statusBarStyle": "dark"
+      "statusBarStyle": "dark",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "O app precisa acessar sua localização para sugerir endereços de entrega próximos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +27,11 @@
         "barStyle": "dark-content",
         "backgroundColor": "transparent",
         "translucent": true
-      }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -36,6 +43,12 @@
         {
           "photosPermission": "O app precisa acessar suas fotos para envio de documentos.",
           "cameraPermission": "O app precisa acessar sua câmera para tirar fotos dos documentos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O app precisa acessar sua localização para sugerir endereços de entrega próximos."
         }
       ]
     ]

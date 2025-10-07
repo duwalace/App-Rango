@@ -61,6 +61,9 @@ export const getOrderById = async (orderId: string): Promise<Order | null> => {
   }
 };
 
+// Alias para compatibilidade
+export const getOrder = getOrderById;
+
 /**
  * Buscar pedidos de um cliente específico
  */
@@ -199,9 +202,72 @@ export const updateOrderStatus = async (
     });
     
     console.log(`✅ Status do pedido ${orderId} atualizado para: ${status}`);
+    
+    // Se o pedido está pronto, criar automaticamente uma Trip
+    if (status === 'ready') {
+      await createTripForOrder(orderId);
+    }
   } catch (error) {
     console.error('❌ Erro ao atualizar status do pedido:', error);
     throw error;
+  }
+};
+
+/**
+ * Criar Trip automaticamente quando pedido fica pronto
+ */
+const createTripForOrder = async (orderId: string): Promise<void> => {
+  try {
+    // Buscar dados do pedido
+    const order = await getOrderById(orderId);
+    if (!order) {
+      console.error('❌ Pedido não encontrado para criar Trip:', orderId);
+      return;
+    }
+
+    // Verificar se já existe uma Trip para este pedido
+    const { getTripByOrderId } = await import('./tripService');
+    const existingTrip = await getTripByOrderId(orderId);
+    
+    if (existingTrip) {
+      console.log('⚠️ Trip já existe para este pedido:', orderId);
+      return;
+    }
+
+    // Buscar endereço da loja
+    const { getStoreById } = await import('./storeService');
+    const store = await getStoreById(order.storeId);
+    
+    if (!store) {
+      console.error('❌ Loja não encontrada para criar Trip:', order.storeId);
+      return;
+    }
+
+    // Criar a Trip
+    const { createTrip } = await import('./tripService');
+    await createTrip({
+      orderId: order.id,
+      storeId: order.storeId,
+      storeName: order.storeName,
+      customerId: order.customerId,
+      customerName: order.customerName,
+      pickupAddress: {
+        street: store.address.street,
+        number: store.address.number,
+        neighborhood: store.address.neighborhood,
+        city: store.address.city,
+        state: store.address.state,
+        zipCode: store.address.zipCode,
+      },
+      deliveryAddress: order.deliveryAddress,
+      deliveryFee: order.deliveryFee,
+      customerNotes: order.deliveryInstructions,
+    });
+
+    console.log('✅ Trip criada automaticamente para o pedido:', orderId);
+  } catch (error) {
+    console.error('❌ Erro ao criar Trip automaticamente:', error);
+    // Não lançar erro para não bloquear a atualização do pedido
   }
 };
 

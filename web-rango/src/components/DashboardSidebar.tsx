@@ -26,7 +26,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -39,6 +39,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { subscribeToActiveStoreOrders } from "@/services/orderService";
+import { Badge } from "@/components/ui/badge";
 
 interface MenuSection {
   title: string;
@@ -51,12 +54,17 @@ interface MenuSection {
   }[];
 }
 
-const menuSections: MenuSection[] = [
+const getMenuSections = (pendingOrdersCount: number): MenuSection[] => [
   {
     title: "VISÃO GERAL",
     items: [
       { title: "Dashboard", icon: BarChart3, url: "/dashboard", badge: null },
-      { title: "Pedidos em Andamento", icon: ShoppingBag, url: "/dashboard/orders-active", badge: null },
+      { 
+        title: "Pedidos em Andamento", 
+        icon: ShoppingBag, 
+        url: "/dashboard/orders-active", 
+        badge: pendingOrdersCount > 0 ? String(pendingOrdersCount) : null 
+      },
       { title: "Histórico de Pedidos", icon: History, url: "/dashboard/orders-history", badge: null },
     ]
   },
@@ -108,9 +116,27 @@ const menuSections: MenuSection[] = [
 
 export function DashboardSidebar() {
   const { open } = useSidebar();
+  const { user } = useAuth();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["VISÃO GERAL", "CARDÁPIO"]) // Seções abertas por padrão
   );
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+
+  // Subscrever a pedidos ativos para contar pendentes
+  useEffect(() => {
+    if (!user?.storeId) return;
+
+    const unsubscribe = subscribeToActiveStoreOrders(user.storeId, (orders) => {
+      const pending = orders.filter(o => o.status === 'pending').length;
+      setPendingOrdersCount(pending);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.storeId]);
+
+  const menuSections = getMenuSections(pendingOrdersCount);
 
   const toggleSection = (sectionTitle: string) => {
     const newExpanded = new Set(expandedSections);
@@ -184,16 +210,15 @@ export function DashboardSidebar() {
                                 <>
                                   <span className="flex-1">{item.title}</span>
                                   {item.badge && (
-                                    <span 
+                                    <Badge 
+                                      variant={item.url.includes('orders-active') && Number(item.badge) > 0 ? "destructive" : item.isNew ? "default" : "secondary"}
                                       className={cn(
-                                        "text-xs px-2 py-0.5 rounded-full font-medium",
-                                        item.isNew 
-                                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                          : "bg-primary/20 text-primary"
+                                        "text-xs",
+                                        item.url.includes('orders-active') && Number(item.badge) > 0 && "animate-pulse"
                                       )}
                                     >
                                       {item.badge}
-                                    </span>
+                                    </Badge>
                                   )}
                                 </>
                               )}

@@ -22,6 +22,7 @@ export interface Address {
   neighborhood: string;
   city: string;
   state: string;
+  reference?: string; // Ponto de referência
   isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -36,6 +37,7 @@ export interface AddressFormData {
   neighborhood: string;
   city: string;
   state: string;
+  reference?: string; // Ponto de referência
   isDefault: boolean;
 }
 

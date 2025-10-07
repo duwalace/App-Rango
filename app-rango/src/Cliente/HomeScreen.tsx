@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { HomeStackParamList } from '../types/navigation';
+import { Ionicons } from '@expo/vector-icons';
 import HomeHeader from '../components/HomeHeader';
 import CategoriesCarousel from '../components/CategoriesCarousel';
 import RestaurantCarousel from '../components/RestaurantCarousel';
@@ -15,14 +16,20 @@ import {
   mockFilters
 } from '../data/mockData';
 import { subscribeToActiveStores } from '../services/storeService';
+import { useAuth } from '../contexts/AuthContext';
+import { getFavoriteStores } from '../services/favoriteService';
+import { getActiveCategories, getDefaultCategories } from '../services/categoryService';
 
 type HomeScreenNavigationProp = StackNavigationProp<HomeStackParamList>;
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
+  const { usuarioLogado: user } = useAuth();
   
   // Estados para dados reais do Firebase
   const [stores, setStores] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [favoriteStores, setFavoriteStores] = useState<any[]>([]);
   const [pizzaProducts, setPizzaProducts] = useState<any[]>([]);
   const [marmitaProducts, setMarmitaProducts] = useState<any[]>([]);
   const [popularProducts, setPopularProducts] = useState<any[]>([]);
@@ -31,6 +38,49 @@ const HomeScreen: React.FC = () => {
 
   // Popular banco automaticamente se vazio
   const [autoSeedChecked, setAutoSeedChecked] = useState(false);
+
+  // Carregar categorias
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        // Tentar carregar do Firebase
+        const firebaseCategories = await getActiveCategories();
+        
+        if (firebaseCategories.length > 0) {
+          // Formatar para o componente
+          const formatted = firebaseCategories.map(cat => ({
+            id: cat.id,
+            name: cat.name,
+            icon: cat.icon,
+          }));
+          setCategories(formatted);
+          console.log('✅ Categorias carregadas do Firebase:', formatted.length);
+        } else {
+          // Fallback para categorias padrão
+          const defaultCategories = getDefaultCategories();
+          const formatted = defaultCategories.map(cat => ({
+            id: cat.id,
+            name: cat.name,
+            icon: cat.icon,
+          }));
+          setCategories(formatted);
+          console.log('✅ Usando categorias padrão:', formatted.length);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar categorias:', error);
+        // Fallback para categorias padrão
+        const defaultCategories = getDefaultCategories();
+        const formatted = defaultCategories.map(cat => ({
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon,
+        }));
+        setCategories(formatted);
+      }
+    };
+
+    loadCategories();
+  }, []);
 
   // Estados dos filtros
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -189,6 +239,40 @@ const HomeScreen: React.FC = () => {
     
     loadProducts();
   }, [loading]);
+
+  // Carregar lojas favoritas
+  useEffect(() => {
+    const loadFavorites = async () => {
+      if (!user?.uid) {
+        setFavoriteStores([]);
+        return;
+      }
+
+      try {
+        const favStores = await getFavoriteStores(user.uid);
+        const formattedFavorites = favStores.map(store => ({
+          id: store.id,
+          name: store.name,
+          image: store.coverImage || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=600&h=400&fit=crop',
+          logo: store.logo || 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=100&h=100&fit=crop',
+          rating: store.rating || 4.5,
+          reviewCount: store.reviewCount || 100,
+          distance: '2.1 km',
+          deliveryTime: store.delivery?.deliveryTime || '25-35 min',
+          deliveryFee: `R$ ${store.delivery?.deliveryFee?.toFixed(2) || '3,99'}`,
+          category: store.category || 'Restaurante',
+          isFavorite: true,
+          description: store.description,
+          isActive: store.isActive,
+        }));
+        setFavoriteStores(formattedFavorites);
+      } catch (error) {
+        console.error('Erro ao carregar favoritos:', error);
+      }
+    };
+
+    loadFavorites();
+  }, [user]);
 
   const handleAddressChange = () => {
     navigation.navigate('Address');
@@ -363,7 +447,7 @@ const HomeScreen: React.FC = () => {
       >
         {/* Carrossel de Categorias */}
         <CategoriesCarousel 
-          categories={mockCategories}
+          categories={categories.length > 0 ? categories : mockCategories}
           onCategoryPress={handleCategoryPress}
         />
         
@@ -378,6 +462,31 @@ const HomeScreen: React.FC = () => {
           </View>
         ) : (
           <>
+            {/* Lojas Favoritas */}
+            {favoriteStores.length > 0 && (
+              <View style={styles.favoritesSection}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleContainer}>
+                    <Ionicons name="heart" size={20} color="#EA1D2C" />
+                    <Text style={styles.sectionTitle}>Favoritos</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Favorites')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.seeMoreText}>Ver todos</Text>
+                  </TouchableOpacity>
+                </View>
+                <RestaurantCarousel
+                  title=""
+                  data={favoriteStores}
+                  onSeeMorePress={() => navigation.navigate('Favorites')}
+                  onRestaurantPress={handleRestaurantPress}
+                  onFavoritePress={handleFavoritePress}
+                />
+              </View>
+            )}
+
             {/* Carrossel de Produtos Populares */}
             {pizzaProducts.length > 0 && (
               <ProductCarousel
@@ -510,6 +619,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontStyle: 'italic',
+  },
+  favoritesSection: {
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  seeMoreText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EA1D2C',
   },
   emptyContainer: {
     paddingVertical: 40,

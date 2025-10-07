@@ -1,177 +1,155 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Star, MessageSquare, ThumbsUp, Send } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Star,
-  MessageSquare,
-  ThumbsUp,
-  Package,
-  Clock,
-  Utensils,
-  Truck,
-  ShieldCheck,
-  Gift,
-  Filter,
-  BarChart3,
-  MessageCircle,
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+  serverTimestamp,
+  orderBy,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface Review {
   id: string;
+  orderId: string;
+  customerId: string;
   customerName: string;
   rating: number;
   comment: string;
-  date: Date;
-  orderItems: string[];
-  responded: boolean;
   response?: string;
   helpful: number;
-  hasPhoto: boolean;
-  aspects: {
-    food: number;
-    packaging: number;
-    delivery: number;
-    quantity: number;
-  };
+  createdAt: any;
+  updatedAt: any;
 }
 
-const Reviews = () => {
-  const { toast } = useToast();
-  const [filter, setFilter] = useState<'all' | 'pending' | 'responded' | 'photos'>('all');
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
+interface ReviewStats {
+  average: number;
+  count: number;
+  distribution: { 5: number; 4: number; 3: number; 2: number; 1: number };
+}
 
-  const [reviews] = useState<Review[]>([
-    {
-      id: '1',
-      customerName: 'Carlos Silva',
-      rating: 5,
-      comment: 'Comida excelente! Chegou quentinha e a embalagem estava perfeita. Super recomendo!',
-      date: new Date('2024-03-10'),
-      orderItems: ['X-Burger Especial', 'Batata Frita'],
-      responded: true,
-      response: 'Muito obrigado pelo feedback! Ficamos felizes que tenha gostado! 😊',
-      helpful: 12,
-      hasPhoto: true,
-      aspects: { food: 5, packaging: 5, delivery: 5, quantity: 5 },
-    },
-    {
-      id: '2',
-      customerName: 'Ana Santos',
-      rating: 4,
-      comment: 'Muito bom, mas demorou um pouco mais que o esperado. No mais, tudo ótimo!',
-      date: new Date('2024-03-09'),
-      orderItems: ['Pizza Margherita'],
-      responded: false,
-      helpful: 8,
-      hasPhoto: false,
-      aspects: { food: 5, packaging: 4, delivery: 3, quantity: 4 },
-    },
-    {
-      id: '3',
-      customerName: 'Pedro Oliveira',
-      rating: 5,
-      comment: 'Perfeito! Sempre peço aqui e nunca decepciona. Qualidade top!',
-      date: new Date('2024-03-08'),
-      orderItems: ['X-Bacon', 'Coca-Cola'],
-      responded: true,
-      response: 'Obrigado pela fidelidade, Pedro! Você é demais! 🎉',
-      helpful: 15,
-      hasPhoto: true,
-      aspects: { food: 5, packaging: 5, delivery: 5, quantity: 5 },
-    },
-    {
-      id: '4',
-      customerName: 'Maria Costa',
-      rating: 3,
-      comment: 'Bom, mas a quantidade poderia ser um pouco maior pelo preço.',
-      date: new Date('2024-03-07'),
-      orderItems: ['Salada Caesar'],
-      responded: false,
-      helpful: 3,
-      hasPhoto: false,
-      aspects: { food: 4, packaging: 4, delivery: 4, quantity: 2 },
-    },
-    {
-      id: '5',
-      customerName: 'João Ferreira',
-      rating: 5,
-      comment: 'Simplesmente perfeito! Melhor hambúrguer da região!',
-      date: new Date('2024-03-06'),
-      orderItems: ['X-Burger Especial'],
-      responded: false,
-      helpful: 20,
-      hasPhoto: true,
-      aspects: { food: 5, packaging: 5, delivery: 5, quantity: 5 },
-    },
-  ]);
-
-  // Estatísticas
-  const averageRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
-  const totalReviews = reviews.length;
-
-  const ratingDistribution = [5, 4, 3, 2, 1].map((stars) => {
-    const count = reviews.filter((r) => r.rating === stars).length;
-    const percentage = (count / totalReviews) * 100;
-    return { stars, count, percentage };
+export default function Reviews() {
+  const { user } = useAuth();
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [stats, setStats] = useState<ReviewStats>({
+    average: 0,
+    count: 0,
+    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
   });
+  const [loading, setLoading] = useState(true);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [responseText, setResponseText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const aspectsAverage = {
-    food: reviews.reduce((sum, r) => sum + r.aspects.food, 0) / reviews.length,
-    packaging: reviews.reduce((sum, r) => sum + r.aspects.packaging, 0) / reviews.length,
-    delivery: reviews.reduce((sum, r) => sum + r.aspects.delivery, 0) / reviews.length,
-    quantity: reviews.reduce((sum, r) => sum + r.aspects.quantity, 0) / reviews.length,
+  useEffect(() => {
+    if (user?.storeId) {
+      loadReviews();
+    }
+  }, [user]);
+
+  const loadReviews = async () => {
+    if (!user?.storeId) return;
+
+    try {
+      setLoading(true);
+      const q = query(
+        collection(db, 'reviews'),
+        where('storeId', '==', user.storeId),
+        orderBy('createdAt', 'desc')
+      );
+
+      const snapshot = await getDocs(q);
+      const reviewsData: Review[] = [];
+
+      snapshot.forEach((doc) => {
+        reviewsData.push({ id: doc.id, ...doc.data() } as Review);
+      });
+
+      setReviews(reviewsData);
+      calculateStats(reviewsData);
+    } catch (error) {
+      console.error('Erro ao carregar avaliações:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const pendingResponses = reviews.filter((r) => !r.responded).length;
+  const calculateStats = (reviewsData: Review[]) => {
+    if (reviewsData.length === 0) {
+      setStats({
+        average: 0,
+        count: 0,
+        distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+      });
+      return;
+    }
 
-  const filteredReviews = reviews.filter((review) => {
-    if (filter === 'pending') return !review.responded;
-    if (filter === 'responded') return review.responded;
-    if (filter === 'photos') return review.hasPhoto;
-    return true;
-  });
+    const totalRating = reviewsData.reduce((sum, review) => sum + review.rating, 0);
+    const average = totalRating / reviewsData.length;
 
-  const handleReply = (reviewId: string) => {
-    if (!replyText.trim()) return;
-
-    toast({
-      title: '✅ Resposta enviada!',
-      description: 'Sua resposta foi publicada com sucesso.',
+    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    reviewsData.forEach((review) => {
+      distribution[review.rating as keyof typeof distribution]++;
     });
 
-    setReplyingTo(null);
-    setReplyText('');
+    setStats({
+      average: Math.round(average * 10) / 10,
+      count: reviewsData.length,
+      distribution,
+    });
   };
 
-  const renderStars = (rating: number, size: 'sm' | 'md' | 'lg' = 'md') => {
-    const sizeClasses = {
-      sm: 'h-3 w-3',
-      md: 'h-4 w-4',
-      lg: 'h-5 w-5',
-    };
+  const handleRespond = async (reviewId: string) => {
+    if (!responseText.trim() || responseText.trim().length < 5) {
+      alert('A resposta deve ter pelo menos 5 caracteres');
+      return;
+    }
 
+    try {
+      setSubmitting(true);
+      const reviewRef = doc(db, 'reviews', reviewId);
+      await updateDoc(reviewRef, {
+        response: responseText.trim(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Atualizar localmente
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === reviewId ? { ...r, response: responseText.trim() } : r
+        )
+      );
+
+      setRespondingTo(null);
+      setResponseText('');
+      alert('Resposta enviada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao enviar resposta:', error);
+      alert('Erro ao enviar resposta. Tente novamente.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderStars = (rating: number) => {
     return (
-      <div className="flex items-center gap-0.5">
+      <div className="flex gap-0.5">
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`${sizeClasses[size]} ${
+            className={`h-4 w-4 ${
               star <= rating
                 ? 'fill-yellow-400 text-yellow-400'
-                : 'text-gray-300 dark:text-gray-600'
+                : 'fill-gray-200 text-gray-200'
             }`}
           />
         ))}
@@ -179,307 +157,191 @@ const Reviews = () => {
     );
   };
 
+  const renderDistributionBar = (stars: number, count: number, total: number) => {
+    const percentage = total > 0 ? (count / total) * 100 : 0;
+
+    return (
+      <div key={stars} className="flex items-center gap-3">
+        <span className="text-sm font-medium text-gray-600 w-8">{stars}★</span>
+        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-yellow-400 rounded-full transition-all duration-300"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        <span className="text-sm text-gray-500 w-12 text-right">{count}</span>
+      </div>
+    );
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return '';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Carregando avaliações...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Avaliações</h1>
-          <p className="text-muted-foreground mt-1">
-            Acompanhe o feedback dos seus clientes
+          <h1 className="text-3xl font-bold text-gray-900">Avaliações</h1>
+          <p className="text-gray-500 mt-1">
+            Gerencie e responda às avaliações dos clientes
           </p>
         </div>
-        {pendingResponses > 0 && (
-          <Badge variant="destructive" className="text-base px-4 py-2">
-            {pendingResponses} pendente{pendingResponses > 1 ? 's' : ''}
-          </Badge>
-        )}
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="performance" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2 h-12">
-          <TabsTrigger value="performance" className="gap-2 text-base">
-            <BarChart3 className="h-4 w-4" />
-            Desempenho
-          </TabsTrigger>
-          <TabsTrigger value="reviews" className="gap-2 text-base">
-            <MessageCircle className="h-4 w-4" />
-            Avaliações a comentar
-            {pendingResponses > 0 && (
-              <Badge variant="destructive" className="ml-1">
-                {pendingResponses}
-              </Badge>
+      {/* Estatísticas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Resumo Geral */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Avaliação Geral
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center">
+              <div className="text-5xl font-bold text-gray-900 mb-2">
+                {stats.average.toFixed(1)}
+              </div>
+              {renderStars(stats.average)}
+              <p className="text-sm text-gray-500 mt-2">
+                Baseado em {stats.count} {stats.count === 1 ? 'avaliação' : 'avaliações'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Distribuição */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Distribuição de Avaliações
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[5, 4, 3, 2, 1].map((stars) =>
+              renderDistributionBar(stars, stats.distribution[stars as keyof typeof stats.distribution], stats.count)
             )}
-          </TabsTrigger>
-        </TabsList>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Tab: Desempenho */}
-        <TabsContent value="performance" className="space-y-6">
-          {/* Sobre a Loja */}
-          <Card className="shadow-lg border-2">
-            <CardHeader>
-              <CardTitle className="text-2xl">Sobre a loja</CardTitle>
-              <CardDescription className="text-base">
-                Nos últimos 90 dias, sua loja teve{' '}
-                <strong className="text-foreground">{totalReviews} avaliações</strong> publicadas
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Rating Geral */}
-                <div className="space-y-6">
-                  <div className="flex items-start gap-6">
-                    <div className="text-center">
-                      <div className="text-6xl font-bold text-primary">
-                        {averageRating.toFixed(1)}
+      {/* Lista de Avaliações */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Todas as Avaliações ({reviews.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {reviews.length === 0 ? (
+            <div className="text-center py-12">
+              <Star className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg font-medium">
+                Nenhuma avaliação ainda
+              </p>
+              <p className="text-gray-400 text-sm mt-1">
+                As avaliações dos clientes aparecerão aqui
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6 divide-y">
+              {reviews.map((review) => (
+                <div key={review.id} className="pt-6 first:pt-0">
+                  {/* Cabeçalho */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <span className="text-gray-600 font-medium">
+                          {review.customerName.charAt(0).toUpperCase()}
+                        </span>
                       </div>
-                      <div className="flex items-center justify-center mt-2">
-                        {renderStars(Math.round(averageRating), 'lg')}
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        {totalReviews} avaliações
-                      </p>
-                    </div>
-
-                    <div className="flex-1 space-y-2">
-                      {ratingDistribution.map(({ stars, count, percentage }) => (
-                        <div key={stars} className="flex items-center gap-3">
-                          <div className="flex items-center gap-1 w-20">
-                            {renderStars(stars, 'sm')}
-                          </div>
-                          <Badge variant="secondary" className="w-12 justify-center">
-                            {count}
-                          </Badge>
-                          <Progress value={percentage} className="h-2 flex-1" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ilustração */}
-                <div className="flex items-center justify-center">
-                  <div className="relative">
-                    <div className="w-48 h-48 bg-gradient-to-br from-yellow-100 to-orange-100 dark:from-yellow-900/30 dark:to-orange-900/30 rounded-full flex items-center justify-center">
-                      <Star className="h-24 w-24 fill-yellow-400 text-yellow-400" />
-                    </div>
-                    <div className="absolute -top-4 -right-4 bg-white dark:bg-gray-800 rounded-full p-4 shadow-lg">
-                      <ThumbsUp className="h-8 w-8 text-green-600" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Sobre seus itens */}
-          <Card className="shadow-lg border-2">
-            <CardHeader>
-              <CardTitle className="text-2xl">Sobre seus itens que foram entregues</CardTitle>
-              <CardDescription className="text-base">
-                O que seus clientes mais elogiam
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Utensils className="h-4 w-4 text-orange-600" />
-                        <span className="font-medium">Comida saborosa</span>
-                      </div>
-                      <span className="text-sm font-semibold">
-                        {Math.round((aspectsAverage.food / 5) * 100)}%
-                      </span>
-                    </div>
-                    <Progress value={(aspectsAverage.food / 5) * 100} className="h-2" />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-blue-600" />
-                        <span className="font-medium">Boa embalagem</span>
-                      </div>
-                      <span className="text-sm font-semibold">
-                        {Math.round((aspectsAverage.packaging / 5) * 100)}%
-                      </span>
-                    </div>
-                    <Progress value={(aspectsAverage.packaging / 5) * 100} className="h-2" />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Gift className="h-4 w-4 text-purple-600" />
-                        <span className="font-medium">Boa quantidade</span>
-                      </div>
-                      <span className="text-sm font-semibold">
-                        {Math.round((aspectsAverage.quantity / 5) * 100)}%
-                      </span>
-                    </div>
-                    <Progress value={(aspectsAverage.quantity / 5) * 100} className="h-2" />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Truck className="h-4 w-4 text-green-600" />
-                        <span className="font-medium">Entrega rápida</span>
-                      </div>
-                      <span className="text-sm font-semibold">
-                        {Math.round((aspectsAverage.delivery / 5) * 100)}%
-                      </span>
-                    </div>
-                    <Progress value={(aspectsAverage.delivery / 5) * 100} className="h-2" />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-indigo-600" />
-                        <span className="font-medium">Pontualidade</span>
-                      </div>
-                      <span className="text-sm font-semibold">94%</span>
-                    </div>
-                    <Progress value={94} className="h-2" />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-teal-600" />
-                        <span className="font-medium">Item conforme</span>
-                      </div>
-                      <span className="text-sm font-semibold">97%</span>
-                    </div>
-                    <Progress value={97} className="h-2" />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab: Avaliações a comentar */}
-        <TabsContent value="reviews" className="space-y-6">
-          {/* Avaliações Individuais */}
-          <Card className="shadow-lg border-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-2xl">Avaliações</CardTitle>
-                  <CardDescription className="text-base">
-                    {filteredReviews.length} avaliação{filteredReviews.length !== 1 ? 'ões' : ''}{' '}
-                    encontrada{filteredReviews.length !== 1 ? 's' : ''}
-                  </CardDescription>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  <Select value={filter} onValueChange={(value: any) => setFilter(value)}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="pending">
-                        Pendentes ({reviews.filter((r) => !r.responded).length})
-                      </SelectItem>
-                      <SelectItem value="responded">Respondidas</SelectItem>
-                      <SelectItem value="photos">Com fotos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {filteredReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="p-6 border-2 rounded-lg hover:shadow-md transition-shadow space-y-4"
-                >
-                  {/* Header da Avaliação */}
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <span className="font-semibold text-primary">
-                            {review.customerName.charAt(0)}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-semibold">{review.customerName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(review.date).toLocaleDateString('pt-BR')} •{' '}
-                            {review.orderItems.join(', ')}
-                          </p>
-                        </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {review.customerName}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {formatDate(review.createdAt)}
+                        </p>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      {renderStars(review.rating)}
-                      <Badge variant="outline" className="ml-2">
-                        {review.rating}.0
-                      </Badge>
-                    </div>
+                    {renderStars(review.rating)}
                   </div>
 
                   {/* Comentário */}
-                  <p className="text-base leading-relaxed pl-13">{review.comment}</p>
+                  <p className="text-gray-700 mb-3 leading-relaxed">
+                    {review.comment}
+                  </p>
 
-                  {/* Badges */}
-                  <div className="flex items-center gap-2 pl-13">
-                    {review.hasPhoto && (
-                      <Badge variant="secondary" className="gap-1">
-                        📷 Com foto
+                  {/* Pedido ID */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <Badge variant="outline" className="text-xs">
+                      Pedido #{review.orderId.slice(-6).toUpperCase()}
+                    </Badge>
+                    {review.helpful > 0 && (
+                      <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                        <ThumbsUp className="h-3 w-3" />
+                        {review.helpful}
                       </Badge>
                     )}
-                    <Badge variant="outline" className="gap-1">
-                      <ThumbsUp className="h-3 w-3" />
-                      {review.helpful} úteis
-                    </Badge>
                   </div>
 
-                  {/* Resposta ou Campo de Resposta */}
-                  {review.responded && review.response ? (
-                    <div className="pl-13 pt-4 border-l-4 border-primary/30 bg-blue-50 dark:bg-blue-950/30 p-4 rounded-r-lg">
-                      <div className="flex items-start gap-2">
-                        <MessageSquare className="h-4 w-4 text-primary mt-0.5" />
-                        <div className="flex-1">
-                          <p className="font-semibold text-sm text-primary mb-1">
-                            Resposta da loja
-                          </p>
-                          <p className="text-sm">{review.response}</p>
-                        </div>
-                        <Badge variant="default">Respondida</Badge>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="pl-13 space-y-3">
-                      {replyingTo === review.id ? (
-                        <div className="space-y-3">
+                  {/* Resposta Existente */}
+                  {review.response && (
+                    <Alert className="bg-red-50 border-red-200">
+                      <MessageSquare className="h-4 w-4 text-red-600" />
+                      <AlertDescription>
+                        <p className="text-sm font-medium text-red-900 mb-1">
+                          Sua resposta:
+                        </p>
+                        <p className="text-sm text-red-800">{review.response}</p>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Formulário de Resposta */}
+                  {!review.response && (
+                    <>
+                      {respondingTo === review.id ? (
+                        <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                           <Textarea
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            placeholder="Escreva sua resposta..."
-                            className="min-h-24"
+                            placeholder="Digite sua resposta..."
+                            value={responseText}
+                            onChange={(e) => setResponseText(e.target.value)}
+                            rows={3}
+                            className="resize-none"
                           />
-                          <div className="flex items-center gap-2">
-                            <Button onClick={() => handleReply(review.id)} size="sm">
-                              Publicar Resposta
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleRespond(review.id)}
+                              disabled={submitting}
+                              size="sm"
+                            >
+                              <Send className="h-4 w-4 mr-2" />
+                              Enviar Resposta
                             </Button>
                             <Button
-                              onClick={() => {
-                                setReplyingTo(null);
-                                setReplyText('');
-                              }}
                               variant="outline"
+                              onClick={() => {
+                                setRespondingTo(null);
+                                setResponseText('');
+                              }}
+                              disabled={submitting}
                               size="sm"
                             >
                               Cancelar
@@ -488,32 +350,22 @@ const Reviews = () => {
                         </div>
                       ) : (
                         <Button
-                          onClick={() => setReplyingTo(review.id)}
                           variant="outline"
                           size="sm"
-                          className="gap-2"
+                          onClick={() => setRespondingTo(review.id)}
                         >
-                          <MessageSquare className="h-4 w-4" />
-                          Responder avaliação
+                          <MessageSquare className="h-4 w-4 mr-2" />
+                          Responder
                         </Button>
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
               ))}
-
-              {filteredReviews.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhuma avaliação encontrada com este filtro</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-                </TabsContent>
-      </Tabs>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
-};
-
-export default Reviews;
+}

@@ -28,6 +28,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
+import { ALL_CATEGORIES, CATEGORIES } from '@/constants/categories';
 import loginBg from '@/assets/login-bg.jpg';
 
 export default function Register() {
@@ -336,20 +337,6 @@ export default function Register() {
     sunday: 'Dom'
   };
 
-  const categories = [
-    'Restaurante',
-    'Pizzaria', 
-    'Hamburgueria',
-    'Japonês',
-    'Italiana',
-    'Brasileira',
-    'Lanches',
-    'Saudável',
-    'Açaí',
-    'Sobremesas',
-    'Padaria',
-    'Cafeteria'
-  ];
 
   return (
     <div className="min-h-screen flex">
@@ -565,9 +552,14 @@ export default function Register() {
                         className={`w-full pl-9 h-10 border rounded-md bg-white ${errors.category ? 'border-red-500' : 'border-gray-300'}`}
                       >
                         <option value="">Selecione uma categoria</option>
-                        {categories.map(cat => (
+                        {CATEGORIES.MAIN.map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
+                        <optgroup label="Subcategorias de Restaurantes">
+                          {CATEGORIES.RESTAURANT_SUBCATEGORIES.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </optgroup>
                       </select>
                     </div>
                     {errors.category && (

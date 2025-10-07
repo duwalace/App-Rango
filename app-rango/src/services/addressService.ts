@@ -57,6 +57,7 @@ export const fetchAddressByCEP = async (cep: string): Promise<ViaCEPResponse> =>
 
 /**
  * Listar todos os endereços do usuário
+ * Ordenado por: Padrão primeiro, depois mais recentes
  */
 export const getAddresses = async (userId: string): Promise<Address[]> => {
   try {
@@ -67,10 +68,11 @@ export const getAddresses = async (userId: string): Promise<Address[]> => {
       ADDRESSES_SUBCOLLECTION
     );
 
-    const q = query(addressesRef, orderBy('isDefault', 'desc'), orderBy('createdAt', 'desc'));
+    // Buscar todos sem ordenação composta (evita necessidade de índice)
+    const q = query(addressesRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
 
-    return snapshot.docs.map((doc) => {
+    const addresses = snapshot.docs.map((doc) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -83,10 +85,21 @@ export const getAddresses = async (userId: string): Promise<Address[]> => {
         neighborhood: data.neighborhood,
         city: data.city,
         state: data.state,
+        reference: data.reference,
         isDefault: data.isDefault || false,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
       };
+    });
+
+    // Ordenar localmente: padrão primeiro, depois por data
+    return addresses.sort((a, b) => {
+      // Primeiro, ordenar por isDefault (padrão primeiro)
+      if (a.isDefault !== b.isDefault) {
+        return a.isDefault ? -1 : 1;
+      }
+      // Depois, ordenar por data (mais recente primeiro)
+      return b.createdAt.getTime() - a.createdAt.getTime();
     });
   } catch (error) {
     console.error('Erro ao buscar endereços:', error);

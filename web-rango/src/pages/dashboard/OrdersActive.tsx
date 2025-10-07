@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import {
   AlertCircle,
   TrendingUp,
   Timer,
-  AlertTriangle
+  AlertTriangle,
+  Bell
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { subscribeToActiveStoreOrders, updateOrderStatus } from "@/services/orderService";
@@ -49,6 +50,96 @@ const OrdersActive = () => {
   const [updating, setUpdating] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'kanban'>('all');
+  
+  // Ref para rastrear contagem anterior de pedidos
+  const previousOrderCount = useRef(0);
+
+  // Solicitar permissão para notificações ao montar
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Função para tocar som de notificação
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio('/sounds/new-order.mp3');
+      audio.volume = 0.7;
+      audio.play().catch((error) => {
+        console.error('Erro ao tocar som:', error);
+      });
+    } catch (error) {
+      console.error('Erro ao criar áudio:', error);
+    }
+  };
+
+  // Função para mostrar notificação desktop
+  const showDesktopNotification = (title: string, body: string) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body,
+        icon: '/logo.png',
+        badge: '/favicon.ico',
+        tag: 'new-order',
+        requireInteraction: true,
+        vibrate: [200, 100, 200],
+      });
+
+      // Focar na aba quando clicar na notificação
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    }
+  };
+
+  // Atualizar título da página com contador
+  useEffect(() => {
+    const pendingCount = activeOrders.filter(o => o.status === 'pending').length;
+    
+    if (pendingCount > 0) {
+      document.title = `(${pendingCount}) Novos Pedidos - Rango`;
+    } else if (activeOrders.length > 0) {
+      document.title = `(${activeOrders.length}) Pedidos Ativos - Rango`;
+    } else {
+      document.title = 'Pedidos Ativos - Rango';
+    }
+
+    return () => {
+      document.title = 'Rango';
+    };
+  }, [activeOrders]);
+
+  // Detectar novos pedidos e disparar notificações
+  useEffect(() => {
+    if (loading) return;
+
+    const currentCount = activeOrders.length;
+    
+    // Se houver mais pedidos que antes (novo pedido)
+    if (currentCount > previousOrderCount.current && previousOrderCount.current > 0) {
+      const newOrdersCount = currentCount - previousOrderCount.current;
+      
+      // Tocar som
+      playNotificationSound();
+      
+      // Mostrar notificação desktop
+      showDesktopNotification(
+        '🔔 Novo Pedido Recebido!',
+        `Você recebeu ${newOrdersCount} ${newOrdersCount === 1 ? 'novo pedido' : 'novos pedidos'}`
+      );
+      
+      // Toast visual
+      toast({
+        title: "🔔 Novo Pedido Recebido!",
+        description: "Confirme o pedido para iniciar o preparo",
+        duration: 5000,
+      });
+    }
+    
+    previousOrderCount.current = currentCount;
+  }, [activeOrders.length, loading, toast]);
 
   // Subscrever a pedidos ativos em tempo real
   useEffect(() => {
@@ -320,7 +411,15 @@ const OrdersActive = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Pedidos em Andamento</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Pedidos em Andamento</h1>
+            {stats.newOrders > 0 && (
+              <Badge variant="destructive" className="h-7 px-3 animate-pulse">
+                <Bell className="h-3 w-3 mr-1" />
+                {stats.newOrders} {stats.newOrders === 1 ? 'novo' : 'novos'}
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground mt-1">
             Gerencie todos os pedidos ativos em tempo real
           </p>

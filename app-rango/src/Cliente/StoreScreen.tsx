@@ -1,14 +1,18 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Animated, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Animated, SafeAreaView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { RouteProp, useRoute, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { HomeStackParamList } from '../types/navigation';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../contexts/AuthContext';
 
 // Componentes
 import StoreHeader from '../components/StoreHeader';
 import HighlightDishCard from '../components/HighlightDishCard';
 import MenuSectionHeader from '../components/MenuSectionHeader';
 import MenuItemCard from '../components/MenuItemCard';
+import ReviewCard from '../components/ReviewCard';
+import RatingStars from '../components/RatingStars';
 
 // Serviços
 import { 
@@ -19,6 +23,8 @@ import {
   MenuCategory,
   MenuItem 
 } from '../services/menuService';
+import { getStoreReviews, getReviewStats, Review } from '../services/reviewService';
+import { isFavorite, toggleFavorite } from '../services/favoriteService';
 
 // Dados mock para fallback
 import { mockStore } from '../data/storeData';
@@ -37,6 +43,7 @@ type StoreScreenNavigationProp = StackNavigationProp<HomeStackParamList>;
 const StoreScreen: React.FC = () => {
   const route = useRoute<StoreScreenRouteProp>();
   const navigation = useNavigation<StoreScreenNavigationProp>();
+  const { usuarioLogado: user } = useAuth();
   const { storeId } = route.params || { storeId: 'loja-pizzaria-do-joao' }; // ID padrão da pizzaria
   
   // Animated Value para controlar as animações
@@ -49,6 +56,9 @@ const StoreScreen: React.FC = () => {
   const [highlightDishes, setHighlightDishes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [menuSections, setMenuSections] = useState<MenuSection[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewStats, setReviewStats] = useState<any>(null);
+  const [isFav, setIsFav] = useState(false);
 
   // Carregar dados do Firestore
   useEffect(() => {
@@ -129,12 +139,35 @@ const StoreScreen: React.FC = () => {
       console.error('❌ Erro ao buscar itens populares:', error);
     });
 
+    // Buscar avaliações
+    loadReviews();
+
+    // Verificar se é favorito
+    checkFavoriteStatus();
+
     return () => {
       console.log('🔴 StoreScreen: Cancelando inscrições');
       unsubscribeCategories();
       unsubscribeItems();
     };
   }, [storeId]);
+
+  // Verificar status de favorito
+  const checkFavoriteStatus = async () => {
+    if (!user?.uid) return;
+
+    try {
+      const favorite = await isFavorite(user.uid, storeId);
+      setIsFav(favorite);
+      
+      // Atualizar também no estado da loja
+      if (store) {
+        setStore({ ...store, isFavorite: favorite });
+      }
+    } catch (error) {
+      console.error('Erro ao verificar favorito:', error);
+    }
+  };
 
   // Organizar itens por categoria
   useEffect(() => {
@@ -182,10 +215,48 @@ const StoreScreen: React.FC = () => {
     }
   }, [categories, menuItems]);
 
+  // Carregar avaliações
+  const loadReviews = async () => {
+    try {
+      const [reviewsData, statsData] = await Promise.all([
+        getStoreReviews(storeId, 5), // Pegar apenas 5 reviews para preview
+        getReviewStats(storeId),
+      ]);
+
+      setReviews(reviewsData);
+      setReviewStats(statsData);
+    } catch (error) {
+      console.error('❌ Erro ao carregar avaliações:', error);
+    }
+  };
+
   // Handlers
-  const handleFavoritePress = useCallback(() => {
-    setStore(prev => ({ ...prev, isFavorite: !prev.isFavorite }));
-  }, []);
+  const handleFavoritePress = useCallback(async () => {
+    if (!user?.uid) {
+      // Usuário não logado, redirecionar para login
+      Alert.alert(
+        'Login necessário',
+        'Faça login para adicionar favoritos',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Fazer Login',
+            onPress: () => navigation.navigate('Auth' as any)
+          }
+        ]
+      );
+      return;
+    }
+
+    try {
+      const newStatus = await toggleFavorite(user.uid, storeId);
+      setIsFav(newStatus);
+      setStore((prev: any) => ({ ...prev, isFavorite: newStatus }));
+    } catch (error) {
+      console.error('Erro ao alternar favorito:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar favoritos');
+    }
+  }, [user, storeId, navigation]);
 
   const handleSearchPress = useCallback(() => {
     console.log('Search pressed');
@@ -205,6 +276,15 @@ const StoreScreen: React.FC = () => {
       product: item,
       store: store,
     });
+  }, [navigation, store]);
+
+  const handleSeeAllReviews = useCallback(() => {
+    if (store) {
+      navigation.navigate('StoreReviews', {
+        storeId: store.id,
+        storeName: store.name,
+      });
+    }
   }, [navigation, store]);
 
   // Componente do carrossel de destaques
@@ -227,6 +307,49 @@ const StoreScreen: React.FC = () => {
     </View>
   );
 
+  // Componente da seção de avaliações
+  const renderReviewsSection = () => {
+    if (!reviewStats || reviewStats.count === 0) {
+      return null;
+    }
+
+    return (
+      <View style={styles.reviewsSection}>
+        <View style={styles.reviewsHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Avaliações</Text>
+            <View style={styles.ratingOverview}>
+              <Text style={styles.ratingNumber}>{reviewStats.average.toFixed(1)}</Text>
+              <View style={styles.ratingDetails}>
+                <RatingStars rating={reviewStats.average} size={16} />
+                <Text style={styles.reviewCount}>
+                  {reviewStats.count} {reviewStats.count === 1 ? 'avaliação' : 'avaliações'}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.seeAllButton}
+            onPress={handleSeeAllReviews}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.seeAllText}>Ver todas</Text>
+            <Ionicons name="chevron-forward" size={16} color="#EA1D2C" />
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={reviews}
+          renderItem={({ item }) => <ReviewCard review={item} />}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.reviewsContainer}
+        />
+      </View>
+    );
+  };
+
   // Header da lista (tudo que vem antes do cardápio)
   const renderListHeader = () => (
     <View>
@@ -237,6 +360,7 @@ const StoreScreen: React.FC = () => {
         onSearchPress={handleSearchPress}
       />
       {renderHighlightsSection()}
+      {renderReviewsSection()}
     </View>
   );
 
@@ -332,6 +456,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   highlightsContainer: {
+    paddingHorizontal: 16,
+  },
+  reviewsSection: {
+    backgroundColor: 'white',
+    paddingVertical: 20,
+    marginBottom: 8,
+  },
+  reviewsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  ratingOverview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  ratingNumber: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#333',
+  },
+  ratingDetails: {
+    gap: 4,
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: '#666',
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EA1D2C',
+  },
+  reviewsContainer: {
     paddingHorizontal: 16,
   },
   loadingContainer: {

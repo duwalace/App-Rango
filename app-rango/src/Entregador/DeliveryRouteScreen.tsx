@@ -1,321 +1,688 @@
+/**
+ * DeliveryRouteScreen.tsx
+ * Tela de navegação durante corrida ativa
+ * Mostra rota, detalhes do pedido e ações de progresso
+ */
+
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  Dimensions,
-  Alert
+  Alert,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { subscribeToTrip, updateTripStatus, Trip, TripStatus } from '../services/tripService';
+import { getOrder, Order } from '../services/orderService';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+type DeliveryStackParamList = {
+  DeliveryDashboard: undefined;
+  DeliveryRouteScreen: { tripId: string };
+  DeliveryHistory: undefined;
+  DeliveryWallet: undefined;
+  DeliveryProfile: undefined;
+};
 
-interface RouteScreenProps {
-  route?: {
-    params?: {
-      destination?: { latitude: number; longitude: number };
-      tripData?: any;
-    };
-  };
-}
+type RouteScreenRouteProp = RouteProp<DeliveryStackParamList, 'DeliveryRouteScreen'>;
+type RouteScreenNavigationProp = StackNavigationProp<DeliveryStackParamList, 'DeliveryRouteScreen'>;
 
-const DeliveryRouteScreen: React.FC<RouteScreenProps> = ({ route }) => {
-  const navigation = useNavigation();
-  const [deliveryStage, setDeliveryStage] = useState<'pickup' | 'delivery'>('pickup');
-  const [routeInfo, setRouteInfo] = useState({
-    distance: '1.2 km',
-    estimatedTime: '5 min',
-    nextInstruction: 'Vire à direita na Av. Paulista'
-  });
+const DeliveryRouteScreen = () => {
+  const route = useRoute<RouteScreenRouteProp>();
+  const navigation = useNavigation<RouteScreenNavigationProp>();
+  const { tripId } = route.params;
 
-  // Dados da corrida (normalmente viriam dos parâmetros)
-  const tripData = route?.params?.tripData || {
-    restaurant: { name: 'Burger King', address: 'Av. Paulista, 1000' },
-    customer: { name: 'Maria Silva', address: 'Rua das Flores, 123' },
-    orderId: '#54321'
-  };
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    // Simular atualização da rota baseada no estágio
-    if (deliveryStage === 'pickup') {
-      setRouteInfo({
-        distance: '1.2 km',
-        estimatedTime: '5 min',
-        nextInstruction: 'Vire à direita na Av. Paulista'
-      });
-    } else {
-      setRouteInfo({
-        distance: '3.8 km',
-        estimatedTime: '12 min',
-        nextInstruction: 'Continue reto por 800m'
-      });
+    if (!tripId) {
+      Alert.alert('Erro', 'ID da corrida não encontrado');
+      navigation.goBack();
+      return;
     }
-  }, [deliveryStage]);
 
-  const handleConfirmPickup = () => {
-    Alert.alert(
-      'Confirmar Coleta',
-      'Você coletou o pedido no restaurante?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Sim, coletei', 
-          onPress: () => {
-            console.log('Pedido coletado confirmado');
-            setDeliveryStage('delivery');
-            // Aqui você atualizaria a rota para o endereço do cliente
-          }
+    // Inscrever-se em atualizações da corrida
+    const unsubscribe = subscribeToTrip(tripId, async (updatedTrip) => {
+      if (updatedTrip) {
+        setTrip(updatedTrip);
+
+        // Se for a primeira carga, buscar dados do pedido
+        if (loading && updatedTrip.orderId) {
+          const orderData = await getOrder(updatedTrip.orderId);
+          setOrder(orderData);
+          setLoading(false);
         }
-      ]
-    );
-  };
 
-  const handleConfirmDelivery = () => {
-    Alert.alert(
-      'Confirmar Entrega',
-      'Você entregou o pedido ao cliente?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Sim, entreguei', 
-          onPress: () => {
-            console.log('Entrega confirmada');
-            // Navegar para tela de conclusão ou voltar ao dashboard
-            navigation.navigate('DeliveryCompletion' as never, { tripData } as never);
-          }
+        // Se a corrida foi entregue ou cancelada, voltar ao dashboard
+        if (updatedTrip.status === 'delivered' || updatedTrip.status === 'canceled') {
+          setTimeout(() => {
+            Alert.alert(
+              'Corrida Finalizada',
+              updatedTrip.status === 'delivered' 
+                ? 'Entrega realizada com sucesso!' 
+                : 'Corrida cancelada',
+              [{ text: 'OK', onPress: () => navigation.navigate('DeliveryDashboard') }]
+            );
+          }, 1000);
         }
-      ]
+      } else {
+        Alert.alert('Erro', 'Corrida não encontrada');
+        navigation.goBack();
+      }
+    });
+
+    return () => unsubscribe();
+  }, [tripId, loading]);
+
+  const handleStatusUpdate = async (newStatus: TripStatus) => {
+    if (!trip) return;
+
+    const messages: Record<TripStatus, { title: string; message: string }> = {
+      picking_up: { title: 'Indo buscar', message: 'Confirma que está a caminho da loja?' },
+      picked_up: { title: 'Pedido coletado', message: 'Confirma que coletou o pedido?' },
+      delivering: { title: 'A caminho', message: 'Confirma que está indo para o cliente?' },
+      delivered: { title: 'Entrega concluída', message: 'Confirma que entregou o pedido?' },
+      canceled: { title: 'Cancelar', message: 'Deseja cancelar esta corrida?' },
+      pending: { title: '', message: '' },
+      assigned: { title: '', message: '' },
+      accepted: { title: '', message: '' },
+    };
+
+    const config = messages[newStatus];
+
+    Alert.alert(config.title, config.message, [
+      { text: 'Não', style: 'cancel' },
+      {
+        text: 'Sim',
+        onPress: async () => {
+          setUpdating(true);
+          try {
+            await updateTripStatus(tripId, newStatus);
+            
+            if (newStatus === 'delivered') {
+              Alert.alert('Parabéns! 🎉', 'Entrega realizada com sucesso!');
+            }
+          } catch (error) {
+            Alert.alert('Erro', 'Não foi possível atualizar o status');
+          } finally {
+            setUpdating(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const openMaps = (latitude?: number, longitude?: number, address?: string) => {
+    const destination = latitude && longitude
+      ? `${latitude},${longitude}`
+      : encodeURIComponent(address || '');
+
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+    
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        Alert.alert('Erro', 'Não foi possível abrir o mapa');
+      }
+    });
+  };
+
+  const callPhone = (phone: string) => {
+    const phoneUrl = `tel:${phone}`;
+    Linking.canOpenURL(phoneUrl).then((supported) => {
+      if (supported) {
+        Linking.openURL(phoneUrl);
+      } else {
+        Alert.alert('Erro', 'Não foi possível fazer a ligação');
+      }
+    });
+  };
+
+  const getNextAction = () => {
+    if (!trip) return null;
+
+    const actions: Record<TripStatus, { label: string; status: TripStatus; icon: string } | null> = {
+      accepted: { label: 'Indo buscar pedido', status: 'picking_up', icon: 'bike' },
+      picking_up: { label: 'Coletei o pedido', status: 'picked_up', icon: 'package-variant' },
+      picked_up: { label: 'Indo para o cliente', status: 'delivering', icon: 'truck-delivery' },
+      delivering: { label: 'Pedido entregue', status: 'delivered', icon: 'check-circle' },
+      delivered: null,
+      canceled: null,
+      pending: null,
+      assigned: null,
+    };
+
+    return actions[trip.status];
+  };
+
+  const getStatusInfo = () => {
+    if (!trip) return { text: '', color: '#666', icon: 'information' };
+
+    const info: Record<TripStatus, { text: string; color: string; icon: string }> = {
+      accepted: { text: 'Corrida aceita', color: '#4CAF50', icon: 'check-circle' },
+      picking_up: { text: 'Indo buscar pedido', color: '#2196F3', icon: 'bike' },
+      picked_up: { text: 'Pedido coletado', color: '#FF9800', icon: 'package-variant' },
+      delivering: { text: 'A caminho do cliente', color: '#9C27B0', icon: 'truck-delivery' },
+      delivered: { text: 'Entregue', color: '#4CAF50', icon: 'checkbox-marked-circle' },
+      canceled: { text: 'Cancelada', color: '#F44336', icon: 'close-circle' },
+      pending: { text: 'Pendente', color: '#666', icon: 'clock' },
+      assigned: { text: 'Atribuída', color: '#666', icon: 'account-check' },
+    };
+
+    return info[trip.status];
+  };
+
+  const formatAddress = (address: any) => {
+    return `${address.street}, ${address.number}${address.complement ? ` - ${address.complement}` : ''} - ${address.neighborhood}, ${address.city}/${address.state}`;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF6B35" />
+        <Text style={styles.loadingText}>Carregando corrida...</Text>
+      </View>
     );
-  };
+  }
 
-  const handleBackPress = () => {
-    Alert.alert(
-      'Sair da Navegação',
-      'Tem certeza que deseja sair da navegação? A corrida ainda não foi concluída.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sair', onPress: () => navigation.goBack() }
-      ]
+  if (!trip) {
+    return (
+      <View style={styles.errorContainer}>
+        <Icon name="alert-circle" size={64} color="#ccc" />
+        <Text style={styles.errorText}>Corrida não encontrada</Text>
+      </View>
     );
-  };
+  }
 
-  const getButtonConfig = () => {
-    if (deliveryStage === 'pickup') {
-      return {
-        text: 'CHEGUEI E COLETEI O PEDIDO',
-        onPress: handleConfirmPickup,
-        backgroundColor: '#4CAF50'
-      };
-    } else {
-      return {
-        text: 'ENTREGA REALIZADA',
-        onPress: handleConfirmDelivery,
-        backgroundColor: '#2196F3'
-      };
-    }
-  };
-
-  const buttonConfig = getButtonConfig();
+  const statusInfo = getStatusInfo();
+  const nextAction = getNextAction();
+  const isPickupPhase = trip.status === 'accepted' || trip.status === 'picking_up';
+  const currentAddress = isPickupPhase ? trip.pickupAddress : trip.deliveryAddress;
+  const currentLabel = isPickupPhase ? 'Loja' : 'Cliente';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Overlay de Instruções no Topo */}
-      <View style={styles.topOverlay}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
-          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-        
-        <View style={styles.instructionContainer}>
-          <Text style={styles.instructionText}>{routeInfo.nextInstruction}</Text>
-          <View style={styles.routeInfo}>
-            <Text style={styles.routeInfoText}>{routeInfo.distance} • {routeInfo.estimatedTime}</Text>
-          </View>
-        </View>
+    <View style={styles.container}>
+      {/* Header com status */}
+      <View style={[styles.statusHeader, { backgroundColor: statusInfo.color }]}>
+        <Icon name={statusInfo.icon} size={28} color="#fff" />
+        <Text style={styles.statusHeaderText}>{statusInfo.text}</Text>
       </View>
 
-      {/* Mapa em Tela Cheia (Placeholder) */}
-      <View style={styles.mapContainer}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Mapa simulado ou informações de localização */}
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={80} color="#CCCCCC" />
-          <Text style={styles.mapPlaceholderText}>
-            {deliveryStage === 'pickup' ? 'Rota para o Restaurante' : 'Rota para o Cliente'}
-          </Text>
-          <Text style={styles.mapPlaceholderSubtext}>
-            {deliveryStage === 'pickup' ? tripData.restaurant.name : tripData.customer.name}
-          </Text>
+          <Icon name="map-marker-radius" size={48} color="#FF6B35" />
+          <Text style={styles.mapPlaceholderText}>Mapa de navegação</Text>
+          <TouchableOpacity
+            style={styles.openMapsButton}
+            onPress={() => openMaps(currentAddress.latitude, currentAddress.longitude, formatAddress(currentAddress))}
+          >
+            <Icon name="google-maps" size={20} color="#fff" />
+            <Text style={styles.openMapsButtonText}>Abrir no Google Maps</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Indicador de Estágio */}
-        <View style={styles.stageIndicator}>
-          <View style={[styles.stageStep, deliveryStage === 'pickup' && styles.activeStep]}>
-            <Ionicons 
-              name="restaurant" 
-              size={20} 
-              color={deliveryStage === 'pickup' ? '#FFFFFF' : '#666'} 
-            />
+        {/* Endereços */}
+        <View style={styles.section}>
+          <View style={styles.addressCard}>
+            <View style={styles.addressHeader}>
+              <View style={[styles.addressBadge, { backgroundColor: isPickupPhase ? '#FF6B35' : '#ccc' }]}>
+                <Icon name="store" size={20} color="#fff" />
+              </View>
+              <View style={styles.addressInfo}>
+                <Text style={styles.addressLabel}>Buscar em:</Text>
+                <Text style={styles.addressName}>{trip.storeName}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => openMaps(trip.pickupAddress.latitude, trip.pickupAddress.longitude, formatAddress(trip.pickupAddress))}
+              >
+                <Icon name="navigation" size={20} color="#FF6B35" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.addressText}>{formatAddress(trip.pickupAddress)}</Text>
           </View>
-          <View style={styles.stageLine} />
-          <View style={[styles.stageStep, deliveryStage === 'delivery' && styles.activeStep]}>
-            <Ionicons 
-              name="home" 
-              size={20} 
-              color={deliveryStage === 'delivery' ? '#FFFFFF' : '#666'} 
-            />
+
+          <View style={styles.routeConnector}>
+            <View style={styles.routeLine} />
+            <Icon name="arrow-down" size={24} color="#ccc" />
+          </View>
+
+          <View style={styles.addressCard}>
+            <View style={styles.addressHeader}>
+              <View style={[styles.addressBadge, { backgroundColor: !isPickupPhase ? '#FF6B35' : '#ccc' }]}>
+                <Icon name="home" size={20} color="#fff" />
+              </View>
+              <View style={styles.addressInfo}>
+                <Text style={styles.addressLabel}>Entregar em:</Text>
+                <Text style={styles.addressName}>{trip.customerName}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => openMaps(trip.deliveryAddress.latitude, trip.deliveryAddress.longitude, formatAddress(trip.deliveryAddress))}
+              >
+                <Icon name="navigation" size={20} color="#FF6B35" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.addressText}>{formatAddress(trip.deliveryAddress)}</Text>
           </View>
         </View>
-      </View>
 
-      {/* Overlay de Ação Inferior */}
-      <View style={styles.bottomOverlay}>
-        <View style={styles.tripInfo}>
-          <Text style={styles.tripInfoTitle}>
-            {deliveryStage === 'pickup' ? 'Indo para coleta' : 'Indo para entrega'}
-          </Text>
-          <Text style={styles.tripInfoSubtitle}>
-            Pedido {tripData.orderId}
-          </Text>
+        {/* Informações da corrida */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Informações da Entrega</Text>
+          
+          <View style={styles.infoGrid}>
+            <View style={styles.infoCard}>
+              <Icon name="cash" size={24} color="#4CAF50" />
+              <Text style={styles.infoValue}>R$ {trip.deliveryFee.toFixed(2)}</Text>
+              <Text style={styles.infoLabel}>Você receberá</Text>
+            </View>
+
+            {trip.distance && (
+              <View style={styles.infoCard}>
+                <Icon name="map-marker-distance" size={24} color="#2196F3" />
+                <Text style={styles.infoValue}>{trip.distance.toFixed(1)} km</Text>
+                <Text style={styles.infoLabel}>Distância</Text>
+              </View>
+            )}
+
+            {trip.estimatedTime && (
+              <View style={styles.infoCard}>
+                <Icon name="clock-outline" size={24} color="#FF9800" />
+                <Text style={styles.infoValue}>{trip.estimatedTime} min</Text>
+                <Text style={styles.infoLabel}>Tempo estimado</Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.actionButton, { backgroundColor: buttonConfig.backgroundColor }]}
-          onPress={buttonConfig.onPress}
-        >
-          <Text style={styles.actionButtonText}>{buttonConfig.text}</Text>
-        </TouchableOpacity>
+        {/* Detalhes do pedido */}
+        {order && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Itens do Pedido</Text>
+            <View style={styles.orderItems}>
+              {order.items.map((item, index) => (
+                <View key={index} style={styles.orderItem}>
+                  <Text style={styles.orderItemQty}>{item.quantity}x</Text>
+                  <Text style={styles.orderItemName}>{item.name}</Text>
+                  <Text style={styles.orderItemPrice}>R$ {item.subtotal.toFixed(2)}</Text>
+                </View>
+              ))}
+              <View style={styles.orderTotal}>
+                <Text style={styles.orderTotalLabel}>Total do pedido:</Text>
+                <Text style={styles.orderTotalValue}>R$ {order.total.toFixed(2)}</Text>
+              </View>
+              <View style={styles.paymentInfo}>
+                <Icon name="credit-card" size={18} color="#666" />
+                <Text style={styles.paymentText}>
+                  {order.paymentMethod === 'cash' ? 'Dinheiro' : 
+                   order.paymentMethod === 'pix' ? 'PIX' : 
+                   order.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : 
+                   'Cartão de Débito'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Observações */}
+        {trip.customerNotes && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Observações do Cliente</Text>
+            <View style={styles.notesBox}>
+              <Icon name="note-text" size={20} color="#666" />
+              <Text style={styles.notesText}>{trip.customerNotes}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Contato */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Contato</Text>
+          <View style={styles.contactButtons}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={() => callPhone(order?.customerPhone || trip.customerName)}
+            >
+              <Icon name="phone" size={24} color="#fff" />
+              <Text style={styles.contactButtonText}>Ligar para cliente</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      {/* Ações fixas no rodapé */}
+      <View style={styles.footer}>
+        {nextAction && (
+          <TouchableOpacity
+            style={[styles.actionButton, updating && styles.actionButtonDisabled]}
+            onPress={() => handleStatusUpdate(nextAction.status)}
+            disabled={updating}
+          >
+            {updating ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Icon name={nextAction.icon} size={24} color="#fff" />
+                <Text style={styles.actionButtonText}>{nextAction.label}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {trip.status !== 'delivered' && trip.status !== 'canceled' && (
+          <TouchableOpacity
+            style={[styles.cancelButton, updating && styles.actionButtonDisabled]}
+            onPress={() => handleStatusUpdate('canceled')}
+            disabled={updating}
+          >
+            <Icon name="close-circle" size={20} color="#F44336" />
+            <Text style={styles.cancelButtonText}>Cancelar corrida</Text>
+          </TouchableOpacity>
+        )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#f5f5f5',
   },
-  topOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    flexDirection: 'row',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  backButton: {
-    padding: 8,
-    marginRight: 15,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
-  instructionContainer: {
+  errorContainer: {
     flex: 1,
-  },
-  instructionText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 5,
-  },
-  routeInfo: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
-  routeInfoText: {
-    fontSize: 14,
-    color: '#CCCCCC',
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
-  mapContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  mapPlaceholder: {
-    flex: 1,
-    backgroundColor: '#F0F0F0',
+  statusHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  statusHeaderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  content: {
+    flex: 1,
+  },
+  mapPlaceholder: {
+    backgroundColor: '#e3f2fd',
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: '#2196F3',
   },
   mapPlaceholderText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 15,
-  },
-  mapPlaceholderSubtext: {
+    marginTop: 8,
     fontSize: 14,
-    color: '#999',
-    marginTop: 5,
+    color: '#666',
   },
-  stageIndicator: {
-    position: 'absolute',
-    top: 120,
-    right: 20,
+  openMapsButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: '#4285F4',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 25,
-    padding: 15,
+    marginTop: 12,
+    gap: 8,
   },
-  stageStep: {
+  openMapsButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  section: {
+    backgroundColor: '#fff',
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  addressCard: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  addressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 12,
+  },
+  addressBadge: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E5E5E5',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  activeStep: {
-    backgroundColor: '#EA1D2C',
+  addressInfo: {
+    flex: 1,
   },
-  stageLine: {
-    width: 2,
-    height: 20,
-    backgroundColor: '#E5E5E5',
-    marginVertical: 5,
+  addressLabel: {
+    fontSize: 12,
+    color: '#666',
   },
-  bottomOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  tripInfo: {
-    marginBottom: 20,
-  },
-  tripInfoTitle: {
-    fontSize: 18,
+  addressName: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 5,
   },
-  tripInfoSubtitle: {
+  addressText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginLeft: 52,
+  },
+  iconButton: {
+    padding: 8,
+  },
+  routeConnector: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  routeLine: {
+    width: 2,
+    height: 20,
+    backgroundColor: '#ccc',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  infoCard: {
+    flex: 1,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  infoValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  orderItems: {
+    gap: 8,
+  },
+  orderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  orderItemQty: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF6B35',
+    width: 40,
+  },
+  orderItemName: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  orderItemPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  orderTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    marginTop: 8,
+    borderTopWidth: 2,
+    borderTopColor: '#e0e0e0',
+  },
+  orderTotalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  orderTotalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  paymentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  paymentText: {
     fontSize: 14,
     color: '#666',
   },
-  actionButton: {
-    borderRadius: 12,
-    paddingVertical: 16,
+  notesBox: {
+    flexDirection: 'row',
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    padding: 12,
+    gap: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffc107',
+  },
+  notesText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#856404',
+    lineHeight: 20,
+  },
+  contactButtons: {
+    gap: 12,
+  },
+  contactButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  contactButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  footer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    gap: 10,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF6B35',
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 10,
   },
   actionButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#F44336',
+    gap: 8,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F44336',
   },
 });
 

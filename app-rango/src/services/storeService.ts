@@ -62,6 +62,7 @@ export const getActiveStores = async (): Promise<Store[]> => {
 
 /**
  * Buscar lojas por categoria
+ * Aceita tanto o nome da categoria quanto o slug
  */
 export const getStoresByCategory = async (category: string): Promise<Store[]> => {
   try {
@@ -82,6 +83,46 @@ export const getStoresByCategory = async (category: string): Promise<Store[]> =>
   } catch (error) {
     console.error('Erro ao buscar lojas por categoria:', error);
     throw error;
+  }
+};
+
+/**
+ * Buscar lojas por slug de categoria (ex: 'restaurantes', 'mercado')
+ * Suporta busca case-insensitive e parcial
+ */
+export const getStoresByCategorySlug = async (categorySlug: string): Promise<Store[]> => {
+  try {
+    // Buscar todas as lojas ativas
+    const q = query(
+      collection(db, STORES_COLLECTION),
+      where('isActive', '==', true)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const stores: Store[] = [];
+    
+    // Filtrar no cliente para suportar busca case-insensitive
+    querySnapshot.forEach((doc) => {
+      const storeData = doc.data();
+      const storeCategory = (storeData.category || '').toLowerCase();
+      const searchSlug = categorySlug.toLowerCase();
+      
+      // Aceitar correspondência exata ou parcial
+      // Ex: 'restaurantes' encontra 'Restaurante', 'Restaurantes', etc.
+      if (
+        storeCategory === searchSlug ||
+        storeCategory.includes(searchSlug) ||
+        searchSlug.includes(storeCategory)
+      ) {
+        stores.push({ id: doc.id, ...storeData } as Store);
+      }
+    });
+    
+    console.log(`✅ Lojas encontradas para categoria "${categorySlug}":`, stores.length);
+    return stores;
+  } catch (error) {
+    console.error('❌ Erro ao buscar lojas por slug de categoria:', error);
+    return [];
   }
 };
 

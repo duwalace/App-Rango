@@ -42,6 +42,15 @@ import CartScreen from './src/Cliente/CartScreen';
 import PersonalDataScreen from './src/Cliente/PersonalDataScreen';
 import AddressesScreen from './src/Cliente/AddressesScreen';
 
+// Telas de Checkout
+import CheckoutAddressScreen from './src/Cliente/CheckoutAddressScreen';
+import CheckoutPaymentScreen from './src/Cliente/CheckoutPaymentScreen';
+import CheckoutReviewScreen from './src/Cliente/CheckoutReviewScreen';
+import OrderConfirmationScreen from './src/Cliente/OrderConfirmationScreen';
+
+// Telas de Endereço
+import AddAddressScreen from './src/Cliente/AddAddressScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator();
@@ -73,6 +82,11 @@ function HomeStack() {
       <Stack.Screen name="Product" component={ProductScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
       <Stack.Screen name="Address" component={AddressScreen} />
+      <Stack.Screen name="CheckoutAddress" component={CheckoutAddressScreen} />
+      <Stack.Screen name="CheckoutPayment" component={CheckoutPaymentScreen} />
+      <Stack.Screen name="CheckoutReview" component={CheckoutReviewScreen} />
+      <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
+      <Stack.Screen name="AddAddress" component={AddAddressScreen} />
     </Stack.Navigator>
   );
 }

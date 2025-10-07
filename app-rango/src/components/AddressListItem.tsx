@@ -1,19 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-interface AddressData {
-  id: string;
-  name: string;
-  fullAddress: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  isSelected?: boolean;
-}
+import { Address } from '../types/profile';
 
 interface AddressListItemProps {
-  address: AddressData;
-  onPress: (address: AddressData) => void;
-  onOptionsPress: (address: AddressData) => void;
+  address: Address;
+  onPress: (address: Address) => void;
+  onOptionsPress: (address: Address) => void;
 }
 
 const AddressListItem: React.FC<AddressListItemProps> = ({
@@ -21,30 +14,73 @@ const AddressListItem: React.FC<AddressListItemProps> = ({
   onPress,
   onOptionsPress,
 }) => {
+  // Mapear label para ícone
+  const getIcon = (label: string): keyof typeof Ionicons.glyphMap => {
+    switch (label) {
+      case 'home':
+        return 'home';
+      case 'work':
+        return 'briefcase';
+      default:
+        return 'location';
+    }
+  };
+
+  // Mapear label para nome
+  const getLabelName = (label: string): string => {
+    switch (label) {
+      case 'home':
+        return 'Casa';
+      case 'work':
+        return 'Trabalho';
+      default:
+        return 'Outro';
+    }
+  };
+
+  // Formatar endereço completo
+  const formatFullAddress = (addr: Address): string => {
+    const parts = [
+      addr.street,
+      addr.number,
+      addr.complement,
+      addr.neighborhood,
+      addr.city,
+      addr.state,
+    ].filter(Boolean); // Remove valores vazios/undefined
+    
+    return parts.join(', ');
+  };
+
+  const icon = getIcon(address.label);
+  const labelName = getLabelName(address.label);
+  const fullAddress = formatFullAddress(address);
+  const isSelected = address.isDefault;
+
   return (
     <TouchableOpacity 
-      style={[styles.container, address.isSelected && styles.selectedContainer]} 
+      style={[styles.container, isSelected && styles.selectedContainer]} 
       onPress={() => onPress(address)}
     >
       <View style={styles.leftContent}>
         <Ionicons 
-          name={address.icon} 
+          name={icon} 
           size={24} 
-          color={address.isSelected ? "#EA1D2C" : "#666"} 
+          color={isSelected ? "#EA1D2C" : "#666"} 
           style={styles.addressIcon} 
         />
         <View style={styles.textContainer}>
-          <Text style={[styles.addressName, address.isSelected && styles.selectedText]}>
-            {address.name}
+          <Text style={[styles.addressName, isSelected && styles.selectedText]}>
+            {labelName}
           </Text>
           <Text style={styles.fullAddress} numberOfLines={2}>
-            {address.fullAddress}
+            {fullAddress}
           </Text>
         </View>
       </View>
       
       <View style={styles.rightContent}>
-        {address.isSelected && (
+        {isSelected && (
           <Ionicons name="checkmark" size={20} color="#EA1D2C" style={styles.checkIcon} />
         )}
         <TouchableOpacity 

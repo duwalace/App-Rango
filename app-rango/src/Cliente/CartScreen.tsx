@@ -71,12 +71,9 @@ const CartScreen: React.FC = () => {
   }, [navigation]);
 
   const handleContinue = useCallback(() => {
-    Alert.alert(
-      'Continuar',
-      'Funcionalidade de checkout será implementada em breve!',
-      [{ text: 'OK' }]
-    );
-  }, []);
+    // Navegar para checkout
+    navigation.navigate('CheckoutAddress');
+  }, [navigation]);
 
   const formatPrice = (price: number) => {
     return `R$ ${price.toFixed(2).replace('.', ',')}`;

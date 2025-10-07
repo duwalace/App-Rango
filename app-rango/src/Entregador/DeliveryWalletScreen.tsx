@@ -1,411 +1,479 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+/**
+ * DeliveryWalletScreen.tsx
+ * Tela financeira do entregador
+ * Mostra ganhos, histórico de pagamentos e opções de saque
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  FlatList,
-  Alert
+  RefreshControl,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { getDeliveryPersonTrips, Trip } from '../services/tripService';
+import { getDeliveryPerson, DeliveryPerson } from '../services/deliveryService';
+import { useAuth } from '../contexts/AuthContext';
 
-interface Transaction {
-  id: string;
-  type: 'earning' | 'withdrawal';
-  amount: number;
-  description: string;
-  date: string;
-  time: string;
-  orderId?: string;
-}
+const DeliveryWalletScreen = () => {
+  const { usuarioLogado } = useAuth();
 
-const DeliveryWalletScreen: React.FC = () => {
-  const navigation = useNavigation();
-  
-  // Dados simulados da carteira
-  const [walletData] = useState({
-    availableBalance: 234.50,
-    nextPayoutDate: '05/10/2025',
-    nextPayoutAmount: 180.00,
-    bankAccount: {
-      bank: 'Banco do Brasil',
-      account: '****-1234'
+  const [deliveryPerson, setDeliveryPerson] = useState<DeliveryPerson | null>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    if (!usuarioLogado?.uid) return;
+
+    try {
+      const [personData, tripsData] = await Promise.all([
+        getDeliveryPerson(usuarioLogado.uid),
+        getDeliveryPersonTrips(usuarioLogado.uid),
+      ]);
+
+      setDeliveryPerson(personData);
+      setTrips(tripsData.filter(t => t.status === 'delivered'));
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  });
-
-  // Dados simulados de transações
-  const [transactions] = useState<Transaction[]>([
-    {
-      id: '1',
-      type: 'earning',
-      amount: 12.50,
-      description: 'Corrida #54325',
-      date: '30/09/2025',
-      time: '14:30',
-      orderId: '#54325'
-    },
-    {
-      id: '2',
-      type: 'earning',
-      amount: 8.75,
-      description: 'Corrida #54324',
-      date: '30/09/2025',
-      time: '13:15',
-      orderId: '#54324'
-    },
-    {
-      id: '3',
-      type: 'earning',
-      amount: 15.20,
-      description: 'Corrida #54323',
-      date: '30/09/2025',
-      time: '12:00',
-      orderId: '#54323'
-    },
-    {
-      id: '4',
-      type: 'withdrawal',
-      amount: 180.00,
-      description: 'Repasse para conta bancária',
-      date: '29/09/2025',
-      time: '09:00'
-    },
-    {
-      id: '5',
-      type: 'earning',
-      amount: 9.30,
-      description: 'Corrida #54322',
-      date: '29/09/2025',
-      time: '19:45',
-      orderId: '#54322'
-    },
-    {
-      id: '6',
-      type: 'earning',
-      amount: 11.80,
-      description: 'Corrida #54321',
-      date: '29/09/2025',
-      time: '18:20',
-      orderId: '#54321'
-    }
-  ]);
-
-  const handleRequestPayout = () => {
-    if (walletData.availableBalance < 50) {
-      Alert.alert(
-        'Saldo Insuficiente',
-        'O valor mínimo para solicitar repasse é R$ 50,00.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Solicitar Repasse',
-      `Deseja solicitar o repasse de ${formatCurrency(walletData.availableBalance)} para sua conta bancária?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Confirmar', 
-          onPress: () => {
-            console.log('Repasse solicitado');
-            Alert.alert('Sucesso', 'Repasse solicitado com sucesso! O valor será transferido em até 2 dias úteis.');
-          }
-        }
-      ]
-    );
   };
 
-  const MapsToBankAccount = () => {
-    console.log('Navegar para gerenciar conta bancária');
-    // Implementar navegação para tela de dados bancários
-    navigation.navigate('DeliveryBankAccount' as never);
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
   };
 
-  const formatCurrency = (value: number) => {
-    return `R$ ${value.toFixed(2).replace('.', ',')}`;
-  };
+  const filterTripsByPeriod = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
 
-  const formatDate = (date: string) => {
-    return new Date(date.split('/').reverse().join('-')).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short'
+    return trips.filter((trip) => {
+      const tripDate = trip.deliveredAt instanceof Date ? trip.deliveredAt : trip.deliveredAt?.toDate();
+      if (!tripDate) return false;
+
+      switch (selectedPeriod) {
+        case 'today':
+          return tripDate >= today;
+        case 'week':
+          return tripDate >= weekAgo;
+        case 'month':
+          return tripDate >= monthAgo;
+        case 'all':
+        default:
+          return true;
+      }
     });
   };
 
-  const renderTransactionItem = ({ item }: { item: Transaction }) => (
-    <View style={styles.transactionItem}>
-      <View style={styles.transactionIcon}>
-        <Ionicons 
-          name={item.type === 'earning' ? 'add-circle' : 'remove-circle'} 
-          size={24} 
-          color={item.type === 'earning' ? '#4CAF50' : '#FF5722'} 
-        />
-      </View>
-      
-      <View style={styles.transactionInfo}>
-        <Text style={styles.transactionDescription}>{item.description}</Text>
-        <Text style={styles.transactionDate}>{item.date} • {item.time}</Text>
-      </View>
-      
-      <Text style={[
-        styles.transactionAmount,
-        { color: item.type === 'earning' ? '#4CAF50' : '#FF5722' }
-      ]}>
-        {item.type === 'earning' ? '+' : '-'} {formatCurrency(item.amount)}
-      </Text>
-    </View>
-  );
+  const calculatePeriodEarnings = () => {
+    const filteredTrips = filterTripsByPeriod();
+    return filteredTrips.reduce((sum, trip) => sum + trip.deliveryFee, 0);
+  };
+
+  const handleWithdraw = () => {
+    Alert.alert(
+      'Solicitar Saque',
+      'Funcionalidade em desenvolvimento.\nEm breve você poderá solicitar saques diretamente pelo app.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const formatDate = (date: Date | any) => {
+    if (!date) return '';
+    const d = date instanceof Date ? date : date.toDate();
+    return d.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const formatTime = (date: Date | any) => {
+    if (!date) return '';
+    const d = date instanceof Date ? date : date.toDate();
+    return d.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const periodEarnings = calculatePeriodEarnings();
+  const periodTrips = filterTripsByPeriod();
+  const averageEarning = periodTrips.length > 0 ? periodEarnings / periodTrips.length : 0;
+
+  // Agrupar corridas por data
+  const groupedTrips = periodTrips.reduce((groups: Record<string, Trip[]>, trip) => {
+    const date = formatDate(trip.deliveredAt);
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(trip);
+    return groups;
+  }, {});
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />}
+    >
+      {/* Saldo principal */}
+      <View style={styles.balanceCard}>
+        <View style={styles.balanceHeader}>
+          <Icon name="wallet" size={32} color="#fff" />
+          <Text style={styles.balanceLabel}>Saldo Total</Text>
+        </View>
+        <Text style={styles.balanceValue}>
+          R$ {deliveryPerson?.stats?.totalEarnings?.toFixed(2) || '0.00'}
+        </Text>
+        <TouchableOpacity style={styles.withdrawButton} onPress={handleWithdraw}>
+          <Icon name="bank-transfer" size={20} color="#FF6B35" />
+          <Text style={styles.withdrawButtonText}>Solicitar Saque</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Carteira</Text>
-        <View style={styles.placeholder} />
       </View>
 
-      <FlatList
-        data={transactions}
-        renderItem={renderTransactionItem}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            {/* Card de Saldo Principal */}
-            <View style={styles.balanceCard}>
-              <Text style={styles.balanceLabel}>Saldo Disponível</Text>
-              <Text style={styles.balanceValue}>{formatCurrency(walletData.availableBalance)}</Text>
-              <Text style={styles.balanceSubtext}>
-                Disponível para saque
-              </Text>
-            </View>
+      {/* Filtros de período */}
+      <View style={styles.periodContainer}>
+        <TouchableOpacity
+          style={[styles.periodButton, selectedPeriod === 'today' && styles.periodButtonActive]}
+          onPress={() => setSelectedPeriod('today')}
+        >
+          <Text style={[styles.periodButtonText, selectedPeriod === 'today' && styles.periodButtonTextActive]}>
+            Hoje
+          </Text>
+        </TouchableOpacity>
 
-            {/* Botão de Saque */}
-            <TouchableOpacity style={styles.payoutButton} onPress={handleRequestPayout}>
-              <Ionicons name="card-outline" size={24} color="#FFFFFF" />
-              <Text style={styles.payoutButtonText}>Solicitar Repasse</Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.periodButton, selectedPeriod === 'week' && styles.periodButtonActive]}
+          onPress={() => setSelectedPeriod('week')}
+        >
+          <Text style={[styles.periodButtonText, selectedPeriod === 'week' && styles.periodButtonTextActive]}>
+            7 dias
+          </Text>
+        </TouchableOpacity>
 
-            {/* Informações de Repasse */}
-            <View style={styles.payoutInfoCard}>
-              <View style={styles.payoutInfoHeader}>
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-                <Text style={styles.payoutInfoTitle}>Próximo repasse agendado</Text>
-              </View>
-              
-              <View style={styles.payoutInfoContent}>
-                <Text style={styles.payoutDate}>{walletData.nextPayoutDate}</Text>
-                <Text style={styles.payoutAmount}>{formatCurrency(walletData.nextPayoutAmount)}</Text>
-              </View>
-              
-              <View style={styles.bankInfo}>
-                <Ionicons name="business-outline" size={16} color="#999" />
-                <Text style={styles.bankInfoText}>
-                  {walletData.bankAccount.bank} • {walletData.bankAccount.account}
-                </Text>
-              </View>
-            </View>
+        <TouchableOpacity
+          style={[styles.periodButton, selectedPeriod === 'month' && styles.periodButtonActive]}
+          onPress={() => setSelectedPeriod('month')}
+        >
+          <Text style={[styles.periodButtonText, selectedPeriod === 'month' && styles.periodButtonTextActive]}>
+            30 dias
+          </Text>
+        </TouchableOpacity>
 
-            {/* Gerenciar Conta Bancária */}
-            <TouchableOpacity style={styles.bankAccountButton} onPress={MapsToBankAccount}>
-              <Ionicons name="card" size={20} color="#EA1D2C" />
-              <Text style={styles.bankAccountButtonText}>Gerenciar conta bancária</Text>
-              <Ionicons name="chevron-forward" size={16} color="#EA1D2C" />
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.periodButton, selectedPeriod === 'all' && styles.periodButtonActive]}
+          onPress={() => setSelectedPeriod('all')}
+        >
+          <Text style={[styles.periodButtonText, selectedPeriod === 'all' && styles.periodButtonTextActive]}>
+            Tudo
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-            {/* Título do Extrato */}
-            <Text style={styles.extractTitle}>Extrato de Transações</Text>
+      {/* Estatísticas do período */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Icon name="currency-usd" size={28} color="#4CAF50" />
+          <Text style={styles.statValue}>R$ {periodEarnings.toFixed(2)}</Text>
+          <Text style={styles.statLabel}>Ganhos no período</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Icon name="package-variant" size={28} color="#2196F3" />
+          <Text style={styles.statValue}>{periodTrips.length}</Text>
+          <Text style={styles.statLabel}>Entregas</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Icon name="chart-line" size={28} color="#FF9800" />
+          <Text style={styles.statValue}>R$ {averageEarning.toFixed(2)}</Text>
+          <Text style={styles.statLabel}>Média por entrega</Text>
+        </View>
+      </View>
+
+      {/* Histórico de ganhos */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Histórico de Ganhos</Text>
+
+        {Object.keys(groupedTrips).length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Icon name="calendar-blank" size={48} color="#ccc" />
+            <Text style={styles.emptyText}>Nenhum ganho neste período</Text>
           </View>
-        }
-        contentContainerStyle={styles.scrollContent}
-      />
-    </SafeAreaView>
+        ) : (
+          Object.entries(groupedTrips).map(([date, dateTrips]) => {
+            const dayTotal = dateTrips.reduce((sum, trip) => sum + trip.deliveryFee, 0);
+
+            return (
+              <View key={date} style={styles.dayGroup}>
+                <View style={styles.dayGroupHeader}>
+                  <Text style={styles.dayGroupDate}>{date}</Text>
+                  <View style={styles.dayGroupTotal}>
+                    <Icon name="cash" size={16} color="#4CAF50" />
+                    <Text style={styles.dayGroupTotalText}>R$ {dayTotal.toFixed(2)}</Text>
+                  </View>
+                </View>
+
+                {dateTrips.map((trip) => (
+                  <View key={trip.id} style={styles.transactionItem}>
+                    <View style={styles.transactionIcon}>
+                      <Icon name="plus" size={16} color="#4CAF50" />
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <Text style={styles.transactionStore}>{trip.storeName}</Text>
+                      <Text style={styles.transactionTime}>{formatTime(trip.deliveredAt)}</Text>
+                    </View>
+                    <Text style={styles.transactionValue}>+ R$ {trip.deliveryFee.toFixed(2)}</Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })
+        )}
+      </View>
+
+      {/* Informações de saque */}
+      <View style={styles.withdrawInfo}>
+        <Icon name="information" size={20} color="#2196F3" />
+        <View style={styles.withdrawInfoText}>
+          <Text style={styles.withdrawInfoTitle}>Como funciona o saque?</Text>
+          <Text style={styles.withdrawInfoDescription}>
+            • Você pode solicitar saques a partir de R$ 20,00{'\n'}
+            • O prazo para recebimento é de 1 a 2 dias úteis{'\n'}
+            • Transferências gratuitas para conta bancária cadastrada
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  backButton: {
-    padding: 5,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  placeholder: {
-    width: 34,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
+    backgroundColor: '#f5f5f5',
   },
   balanceCard: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#FF6B35',
+    margin: 16,
     borderRadius: 16,
-    padding: 30,
+    padding: 24,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  balanceHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 20,
+    gap: 12,
+    marginBottom: 12,
   },
   balanceLabel: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#fff',
     opacity: 0.9,
-    marginBottom: 8,
   },
   balanceValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 20,
   },
-  balanceSubtext: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.8,
-  },
-  payoutButton: {
-    backgroundColor: '#EA1D2C',
-    borderRadius: 12,
-    paddingVertical: 16,
+  withdrawButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-  },
-  payoutButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginLeft: 8,
-  },
-  payoutInfoCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 14,
+    gap: 8,
   },
-  payoutInfoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  payoutInfoTitle: {
+  withdrawButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
+    color: '#FF6B35',
   },
-  payoutInfoContent: {
+  periodContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    marginBottom: 16,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  periodButtonActive: {
+    backgroundColor: '#FF6B35',
+    borderColor: '#FF6B35',
+  },
+  periodButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  periodButtonTextActive: {
+    color: '#fff',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  section: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  dayGroup: {
+    marginBottom: 16,
+  },
+  dayGroupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    marginBottom: 8,
   },
-  payoutDate: {
-    fontSize: 18,
+  dayGroupDate: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#666',
   },
-  payoutAmount: {
-    fontSize: 18,
-    fontWeight: '700',
+  dayGroupTotal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dayGroupTotalText: {
+    fontSize: 14,
+    fontWeight: 'bold',
     color: '#4CAF50',
   },
-  bankInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bankInfoText: {
-    fontSize: 14,
-    color: '#999',
-    marginLeft: 6,
-  },
-  bankAccountButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  bankAccountButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#EA1D2C',
-    flex: 1,
-    marginLeft: 12,
-  },
-  extractTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
-  },
   transactionItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    paddingVertical: 10,
+    gap: 12,
   },
   transactionIcon: {
-    marginRight: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   transactionInfo: {
     flex: 1,
   },
-  transactionDescription: {
-    fontSize: 16,
+  transactionStore: {
+    fontSize: 14,
     fontWeight: '500',
     color: '#333',
-    marginBottom: 4,
   },
-  transactionDate: {
+  transactionTime: {
     fontSize: 12,
     color: '#999',
+    marginTop: 2,
   },
-  transactionAmount: {
+  transactionValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
+  },
+  withdrawInfo: {
+    flexDirection: 'row',
+    backgroundColor: '#E3F2FD',
+    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196F3',
+  },
+  withdrawInfoText: {
+    flex: 1,
+  },
+  withdrawInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1976D2',
+    marginBottom: 6,
+  },
+  withdrawInfoDescription: {
+    fontSize: 13,
+    color: '#1565C0',
+    lineHeight: 20,
   },
 });
 

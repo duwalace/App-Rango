@@ -1,409 +1,427 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity,
+/**
+ * DeliveryHistoryScreen.tsx
+ * Histórico de corridas do entregador
+ * Lista todas as corridas (entregues, canceladas) com filtros
+ */
+
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
   FlatList,
-  ScrollView
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { getDeliveryPersonTrips, Trip } from '../services/tripService';
+import { useAuth } from '../contexts/AuthContext';
 
-interface Trip {
-  id: string;
-  date: string;
-  time: string;
-  restaurantName: string;
-  customerName: string;
-  earnings: number;
-  status: 'completed' | 'cancelled';
-  distance: number;
-}
+type DeliveryStackParamList = {
+  DeliveryDashboard: undefined;
+  DeliveryRouteScreen: { tripId: string };
+  DeliveryHistory: undefined;
+  DeliveryWallet: undefined;
+  DeliveryProfile: undefined;
+};
 
-const DeliveryHistoryScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const [selectedFilter, setSelectedFilter] = useState<'today' | 'week' | 'month'>('today');
+type NavigationProp = StackNavigationProp<DeliveryStackParamList, 'DeliveryHistory'>;
 
-  // Dados simulados de corridas
-  const [trips] = useState<Trip[]>([
-    {
-      id: '1',
-      date: '30/09/2025',
-      time: '14:30',
-      restaurantName: 'Burger King',
-      customerName: 'Maria Silva',
-      earnings: 12.50,
-      status: 'completed',
-      distance: 4.2
-    },
-    {
-      id: '2',
-      date: '30/09/2025',
-      time: '13:15',
-      restaurantName: 'McDonald\'s',
-      customerName: 'João Santos',
-      earnings: 8.75,
-      status: 'completed',
-      distance: 2.8
-    },
-    {
-      id: '3',
-      date: '30/09/2025',
-      time: '12:00',
-      restaurantName: 'Pizza Hut',
-      customerName: 'Ana Costa',
-      earnings: 15.20,
-      status: 'completed',
-      distance: 6.1
-    },
-    {
-      id: '4',
-      date: '29/09/2025',
-      time: '19:45',
-      restaurantName: 'Subway',
-      customerName: 'Carlos Lima',
-      earnings: 9.30,
-      status: 'completed',
-      distance: 3.5
-    },
-    {
-      id: '5',
-      date: '29/09/2025',
-      time: '18:20',
-      restaurantName: 'KFC',
-      customerName: 'Lucia Oliveira',
-      earnings: 11.80,
-      status: 'completed',
-      distance: 4.7
-    }
-  ]);
+type FilterType = 'all' | 'delivered' | 'canceled';
 
-  const getFilteredTrips = () => {
-    const today = new Date();
-    const todayStr = today.toLocaleDateString('pt-BR');
-    
-    switch (selectedFilter) {
-      case 'today':
-        return trips.filter(trip => trip.date === todayStr);
-      case 'week':
-        // Simular filtro da semana (últimos 7 dias)
-        return trips;
-      case 'month':
-        // Simular filtro do mês
-        return trips;
-      default:
-        return trips;
+const DeliveryHistoryScreen = () => {
+  const navigation = useNavigation<NavigationProp>();
+  const { usuarioLogado } = useAuth();
+
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [filteredTrips, setFilteredTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<FilterType>('all');
+
+  useEffect(() => {
+    loadTrips();
+  }, []);
+
+  useEffect(() => {
+    filterTrips();
+  }, [trips, filter]);
+
+  const loadTrips = async () => {
+    if (!usuarioLogado?.uid) return;
+
+    try {
+      const data = await getDeliveryPersonTrips(usuarioLogado.uid);
+      // Filtrar apenas corridas finalizadas (entregues ou canceladas)
+      const finishedTrips = data.filter(
+        trip => trip.status === 'delivered' || trip.status === 'canceled'
+      );
+      setTrips(finishedTrips);
+    } catch (error) {
+      console.error('Erro ao carregar histórico:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const getTotalEarnings = () => {
-    const filteredTrips = getFilteredTrips();
-    return filteredTrips.reduce((total, trip) => total + trip.earnings, 0);
-  };
-
-  const getFilterLabel = () => {
-    switch (selectedFilter) {
-      case 'today': return 'Hoje';
-      case 'week': return 'Esta Semana';
-      case 'month': return 'Este Mês';
-      default: return 'Hoje';
+  const filterTrips = () => {
+    if (filter === 'all') {
+      setFilteredTrips(trips);
+    } else {
+      setFilteredTrips(trips.filter(trip => trip.status === filter));
     }
   };
 
-  const MapsToTripDetails = (trip: Trip) => {
-    console.log('Navegar para detalhes da corrida:', trip.id);
-    // Navegar para tela de detalhes específicos da corrida
-    navigation.navigate('DeliveryTripHistory' as never, { tripId: trip.id, tripData: trip } as never);
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadTrips();
   };
 
-  const formatCurrency = (value: number) => {
-    return `R$ ${value.toFixed(2).replace('.', ',')}`;
+  const formatDate = (date: Date | any) => {
+    if (!date) return '';
+    const d = date instanceof Date ? date : date.toDate();
+    return d.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
-  const renderTripItem = ({ item }: { item: Trip }) => (
-    <TouchableOpacity 
-      style={styles.tripCard}
-      onPress={() => MapsToTripDetails(item)}
-    >
-      <View style={styles.tripHeader}>
-        <View style={styles.tripInfo}>
-          <Text style={styles.tripDate}>{item.date} • {item.time}</Text>
-          <Text style={styles.restaurantName}>{item.restaurantName}</Text>
-          <Text style={styles.customerName}>Para: {item.customerName}</Text>
-        </View>
-        
-        <View style={styles.tripEarnings}>
-          <Text style={styles.earningsValue}>{formatCurrency(item.earnings)}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: item.status === 'completed' ? '#4CAF50' : '#FF5722' }]}>
-            <Text style={styles.statusText}>
-              {item.status === 'completed' ? 'Concluída' : 'Cancelada'}
-            </Text>
+  const getStatusBadge = (status: string) => {
+    if (status === 'delivered') {
+      return { label: 'Entregue', color: '#4CAF50', icon: 'check-circle' };
+    }
+    return { label: 'Cancelada', color: '#F44336', icon: 'close-circle' };
+  };
+
+  const calculateStats = () => {
+    const delivered = trips.filter(t => t.status === 'delivered');
+    const totalEarnings = delivered.reduce((sum, t) => sum + t.deliveryFee, 0);
+    const totalDeliveries = delivered.length;
+    const totalCanceled = trips.filter(t => t.status === 'canceled').length;
+
+    return { totalEarnings, totalDeliveries, totalCanceled };
+  };
+
+  const stats = calculateStats();
+
+  const renderTripItem = ({ item }: { item: Trip }) => {
+    const badge = getStatusBadge(item.status);
+
+    return (
+      <TouchableOpacity
+        style={styles.tripCard}
+        onPress={() => {
+          // Poderia navegar para uma tela de detalhes da corrida
+          // navigation.navigate('TripDetails', { tripId: item.id });
+        }}
+      >
+        <View style={styles.tripHeader}>
+          <View style={styles.tripHeaderLeft}>
+            <Icon name="store" size={20} color="#666" />
+            <Text style={styles.storeName} numberOfLines={1}>{item.storeName}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: badge.color }]}>
+            <Icon name={badge.icon} size={14} color="#fff" />
+            <Text style={styles.statusBadgeText}>{badge.label}</Text>
           </View>
         </View>
-      </View>
-      
-      <View style={styles.tripFooter}>
-        <View style={styles.distanceInfo}>
-          <Ionicons name="location-outline" size={14} color="#666" />
-          <Text style={styles.distanceText}>{item.distance.toFixed(1)} km</Text>
-        </View>
-        
-        <Ionicons name="chevron-forward" size={16} color="#999" />
-      </View>
-    </TouchableOpacity>
-  );
 
-  const filteredTrips = getFilteredTrips();
-  const totalEarnings = getTotalEarnings();
+        <View style={styles.tripDivider} />
+
+        <View style={styles.tripDetails}>
+          <View style={styles.tripDetailRow}>
+            <Icon name="calendar" size={16} color="#999" />
+            <Text style={styles.tripDetailText}>
+              {formatDate(item.deliveredAt || item.canceledAt || item.createdAt)}
+            </Text>
+          </View>
+
+          <View style={styles.tripDetailRow}>
+            <Icon name="map-marker" size={16} color="#999" />
+            <Text style={styles.tripDetailText} numberOfLines={1}>
+              {item.deliveryAddress.neighborhood}, {item.deliveryAddress.city}
+            </Text>
+          </View>
+
+          {item.distance && (
+            <View style={styles.tripDetailRow}>
+              <Icon name="map-marker-distance" size={16} color="#999" />
+              <Text style={styles.tripDetailText}>{item.distance.toFixed(1)} km</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.tripFooter}>
+          <View style={styles.earningsBox}>
+            <Icon name="cash" size={20} color="#4CAF50" />
+            <Text style={styles.earningsValue}>R$ {item.deliveryFee.toFixed(2)}</Text>
+          </View>
+          <Icon name="chevron-right" size={20} color="#ccc" />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF6B35" />
+        <Text style={styles.loadingText}>Carregando histórico...</Text>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Histórico de Corridas</Text>
-        <View style={styles.placeholder} />
+    <View style={styles.container}>
+      {/* Header com estatísticas */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Icon name="package-variant" size={24} color="#4CAF50" />
+          <Text style={styles.statValue}>{stats.totalDeliveries}</Text>
+          <Text style={styles.statLabel}>Entregas</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Icon name="cash-multiple" size={24} color="#2196F3" />
+          <Text style={styles.statValue}>R$ {stats.totalEarnings.toFixed(2)}</Text>
+          <Text style={styles.statLabel}>Ganhos</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Icon name="close-circle" size={24} color="#F44336" />
+          <Text style={styles.statValue}>{stats.totalCanceled}</Text>
+          <Text style={styles.statLabel}>Canceladas</Text>
+        </View>
       </View>
 
       {/* Filtros */}
-      <View style={styles.filtersContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {[
-            { key: 'today', label: 'Hoje' },
-            { key: 'week', label: 'Semana' },
-            { key: 'month', label: 'Mês' }
-          ].map((filter) => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                selectedFilter === filter.key && styles.activeFilterButton
-              ]}
-              onPress={() => setSelectedFilter(filter.key as any)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                selectedFilter === filter.key && styles.activeFilterButtonText
-              ]}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
+          onPress={() => setFilter('all')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'all' && styles.filterButtonTextActive]}>
+            Todas ({trips.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'delivered' && styles.filterButtonActive]}
+          onPress={() => setFilter('delivered')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'delivered' && styles.filterButtonTextActive]}>
+            Entregues ({stats.totalDeliveries})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterButton, filter === 'canceled' && styles.filterButtonActive]}
+          onPress={() => setFilter('canceled')}
+        >
+          <Text style={[styles.filterButtonText, filter === 'canceled' && styles.filterButtonTextActive]}>
+            Canceladas ({stats.totalCanceled})
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Resumo de Ganhos */}
-      <View style={styles.summaryContainer}>
-        <Text style={styles.summaryLabel}>Total ganho - {getFilterLabel()}</Text>
-        <Text style={styles.summaryValue}>{formatCurrency(totalEarnings)}</Text>
-        <Text style={styles.summarySubtext}>
-          {filteredTrips.length} {filteredTrips.length === 1 ? 'corrida realizada' : 'corridas realizadas'}
-        </Text>
-      </View>
-
-      {/* Lista de Corridas */}
-      <View style={styles.listContainer}>
-        <Text style={styles.listTitle}>Corridas Realizadas</Text>
-        
-        {filteredTrips.length > 0 ? (
-          <FlatList
-            data={filteredTrips}
-            renderItem={renderTripItem}
-            keyExtractor={(item) => item.id}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-          />
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="bicycle-outline" size={60} color="#CCCCCC" />
-            <Text style={styles.emptyStateText}>Nenhuma corrida encontrada</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Você ainda não realizou corridas {getFilterLabel().toLowerCase()}
+      {/* Lista de corridas */}
+      <FlatList
+        data={filteredTrips}
+        renderItem={renderTripItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Icon name="history" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>Nenhuma corrida encontrada</Text>
+            <Text style={styles.emptySubtext}>
+              {filter === 'all'
+                ? 'Suas corridas finalizadas aparecerão aqui'
+                : filter === 'delivered'
+                ? 'Você ainda não tem entregas concluídas'
+                : 'Você não tem corridas canceladas'}
             </Text>
           </View>
-        )}
-      </View>
-    </SafeAreaView>
+        }
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#f5f5f5',
   },
-  header: {
-    flexDirection: 'row',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#e0e0e0',
   },
-  backButton: {
-    padding: 5,
+  statCard: {
+    flex: 1,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
   },
-  headerTitle: {
+  statValue: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
+    marginTop: 8,
   },
-  placeholder: {
-    width: 34,
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
-  filtersContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
+  filterContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#e0e0e0',
   },
   filterButton: {
-    paddingHorizontal: 20,
+    flex: 1,
     paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#F0F0F0',
-    marginRight: 10,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
   },
-  activeFilterButton: {
-    backgroundColor: '#EA1D2C',
+  filterButtonActive: {
+    backgroundColor: '#FF6B35',
   },
   filterButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#666',
   },
-  activeFilterButtonText: {
-    color: '#FFFFFF',
-  },
-  summaryContainer: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
-  },
-  summaryValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#4CAF50',
-    marginBottom: 5,
-  },
-  summarySubtext: {
-    fontSize: 14,
-    color: '#999',
+  filterButtonTextActive: {
+    color: '#fff',
   },
   listContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 20,
-    marginBottom: 15,
-  },
-  listContent: {
-    paddingBottom: 20,
+    padding: 16,
+    gap: 12,
   },
   tripCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   tripHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
   },
-  tripInfo: {
+  tripHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     flex: 1,
   },
-  tripDate: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 4,
-  },
-  restaurantName: {
+  storeName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 2,
-  },
-  customerName: {
-    fontSize: 14,
-    color: '#666',
-  },
-  tripEarnings: {
-    alignItems: 'flex-end',
-  },
-  earningsValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#4CAF50',
-    marginBottom: 4,
+    flex: 1,
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
   },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#FFFFFF',
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  tripDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginVertical: 12,
+  },
+  tripDetails: {
+    gap: 8,
+  },
+  tripDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tripDetailText: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
   },
   tripFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
-  distanceInfo: {
+  earningsBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  distanceText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
+  earningsValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4CAF50',
   },
-  emptyState: {
-    flex: 1,
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
   },
-  emptyStateText: {
+  emptyText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#999',
-    marginTop: 15,
-    marginBottom: 5,
+    marginTop: 16,
   },
-  emptyStateSubtext: {
+  emptySubtext: {
     fontSize: 14,
-    color: '#CCCCCC',
+    color: '#bbb',
+    marginTop: 8,
     textAlign: 'center',
   },
 });

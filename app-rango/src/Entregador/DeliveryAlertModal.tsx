@@ -6,29 +6,33 @@ import {
   StyleSheet, 
   TouchableOpacity,
   Dimensions,
-  Animated
+  Animated,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { Trip, acceptTrip, rejectTrip, assignTrip } from '../services/tripService';
+import { getDeliveryPerson } from '../services/deliveryService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface DeliveryAlertModalProps {
   visible: boolean;
   onClose: () => void;
+  trip: Trip;
+  deliveryPersonId: string;
 }
 
-const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClose }) => {
+const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ 
+  visible, 
+  onClose, 
+  trip,
+  deliveryPersonId 
+}) => {
+  const navigation = useNavigation();
   const [timeLeft, setTimeLeft] = useState(30);
   const [progressAnim] = useState(new Animated.Value(1));
-
-  // Dados simulados da entrega
-  const deliveryData = {
-    earnings: 10.50,
-    pickupDistance: 1.2,
-    totalDistance: 4.5,
-    restaurantName: 'Burger King',
-    customerAddress: 'Rua das Flores, 123'
-  };
+  const [accepting, setAccepting] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -60,22 +64,62 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClos
     }
   }, [visible]);
 
-  const handleAcceptDelivery = () => {
-    console.log('Entrega aceita!');
-    onClose();
-    // Implementar lógica de aceitar entrega
+  const handleAcceptDelivery = async () => {
+    if (accepting) return;
+
+    try {
+      setAccepting(true);
+      
+      // Buscar dados do entregador para pegar o nome
+      const deliveryPerson = await getDeliveryPerson(deliveryPersonId);
+      
+      if (!deliveryPerson) {
+        Alert.alert('Erro', 'Perfil de entregador não encontrado');
+        return;
+      }
+
+      // Se a corrida ainda não foi atribuída, atribuir primeiro
+      if (trip.status === 'pending') {
+        await assignTrip(trip.id, deliveryPersonId, deliveryPerson.name);
+      }
+
+      // Aceitar a corrida
+      await acceptTrip(trip.id);
+
+      console.log('✅ Corrida aceita!', trip.id);
+      
+      onClose();
+      
+      // Navegar para tela de detalhes da corrida
+      navigation.navigate('DeliveryRouteScreen' as never, { tripId: trip.id } as never);
+      
+    } catch (error) {
+      console.error('❌ Erro ao aceitar corrida:', error);
+      Alert.alert('Erro', 'Não foi possível aceitar a corrida. Tente novamente.');
+    } finally {
+      setAccepting(false);
+    }
   };
 
-  const handleDeclineDelivery = () => {
-    console.log('Entrega recusada!');
-    onClose();
-    // Implementar lógica de recusar entrega
+  const handleDeclineDelivery = async () => {
+    try {
+      await rejectTrip(trip.id, 'Recusado pelo entregador');
+      console.log('✅ Corrida recusada');
+      onClose();
+    } catch (error) {
+      console.error('❌ Erro ao recusar corrida:', error);
+      onClose();
+    }
   };
 
-  const handleAutoDecline = () => {
-    console.log('Entrega recusada automaticamente (tempo esgotado)');
+  const handleAutoDecline = async () => {
+    console.log('⏱️ Corrida recusada automaticamente (tempo esgotado)');
+    try {
+      await rejectTrip(trip.id, 'Tempo esgotado - sem resposta');
+    } catch (error) {
+      console.error('Erro ao auto-recusar:', error);
+    }
     onClose();
-    // Implementar lógica de recusa automática
   };
 
   const formatCurrency = (value: number) => {
@@ -130,7 +174,7 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClos
             <View style={styles.earningsCard}>
               <Text style={styles.earningsLabel}>Ganhos Estimados</Text>
               <Text style={styles.earningsValue}>
-                {formatCurrency(deliveryData.earnings)}
+                {formatCurrency(trip.deliveryFee)}
               </Text>
             </View>
 
@@ -138,9 +182,9 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClos
               <View style={styles.distanceItem}>
                 <Ionicons name="location" size={20} color="#EA1D2C" />
                 <View style={styles.distanceText}>
-                  <Text style={styles.distanceLabel}>Distância até a Coleta</Text>
+                  <Text style={styles.distanceLabel}>Retirar em</Text>
                   <Text style={styles.distanceValue}>
-                    {formatDistance(deliveryData.pickupDistance)}
+                    {trip.pickupAddress.neighborhood}
                   </Text>
                 </View>
               </View>
@@ -148,9 +192,9 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClos
               <View style={styles.distanceItem}>
                 <Ionicons name="map" size={20} color="#4CAF50" />
                 <View style={styles.distanceText}>
-                  <Text style={styles.distanceLabel}>Distância Total da Rota</Text>
+                  <Text style={styles.distanceLabel}>Entregar em</Text>
                   <Text style={styles.distanceValue}>
-                    {formatDistance(deliveryData.totalDistance)}
+                    {trip.deliveryAddress.neighborhood}
                   </Text>
                 </View>
               </View>
@@ -183,8 +227,10 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClos
               </View>
               
               <View style={styles.addressInfo}>
-                <Text style={styles.restaurantName}>{deliveryData.restaurantName}</Text>
-                <Text style={styles.customerAddress}>{deliveryData.customerAddress}</Text>
+                <Text style={styles.restaurantName}>{trip.storeName}</Text>
+                <Text style={styles.customerAddress}>
+                  {trip.deliveryAddress.street}, {trip.deliveryAddress.number}
+                </Text>
               </View>
             </View>
           </View>
@@ -199,10 +245,13 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({ visible, onClos
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={styles.acceptButton} 
+              style={[styles.acceptButton, accepting && styles.acceptButtonDisabled]} 
               onPress={handleAcceptDelivery}
+              disabled={accepting}
             >
-              <Text style={styles.acceptButtonText}>Aceitar</Text>
+              <Text style={styles.acceptButtonText}>
+                {accepting ? 'Aceitando...' : 'Aceitar'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -411,6 +460,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  acceptButtonDisabled: {
+    backgroundColor: '#9E9E9E',
   },
 });
 
