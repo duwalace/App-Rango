@@ -15,11 +15,13 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { subscribeToTrip, updateTripStatus, Trip, TripStatus } from '../services/tripService';
-import { getOrder, Order } from '../services/orderService';
+import { getOrder } from '../services/orderService';
+import { Order } from '../types/shared';
 
 type DeliveryStackParamList = {
   DeliveryDashboard: undefined;
@@ -150,10 +152,10 @@ const DeliveryRouteScreen = () => {
   const getNextAction = () => {
     if (!trip) return null;
 
-    const actions: Record<TripStatus, { label: string; status: TripStatus; icon: string } | null> = {
-      accepted: { label: 'Indo buscar pedido', status: 'picking_up', icon: 'bike' },
-      picking_up: { label: 'Coletei o pedido', status: 'picked_up', icon: 'package-variant' },
-      picked_up: { label: 'Indo para o cliente', status: 'delivering', icon: 'truck-delivery' },
+    const actions: Record<TripStatus, { label: string; status: TripStatus; icon: keyof typeof Icon.glyphMap } | null> = {
+      accepted: { label: 'Indo buscar pedido', status: 'picking_up', icon: 'bicycle' },
+      picking_up: { label: 'Coletei o pedido', status: 'picked_up', icon: 'cube' },
+      picked_up: { label: 'Indo para o cliente', status: 'delivering', icon: 'car' },
       delivering: { label: 'Pedido entregue', status: 'delivered', icon: 'check-circle' },
       delivered: null,
       canceled: null,
@@ -165,17 +167,17 @@ const DeliveryRouteScreen = () => {
   };
 
   const getStatusInfo = () => {
-    if (!trip) return { text: '', color: '#666', icon: 'information' };
+    if (!trip) return { text: '', color: '#666', icon: 'information-circle' as keyof typeof Icon.glyphMap };
 
-    const info: Record<TripStatus, { text: string; color: string; icon: string }> = {
+    const info: Record<TripStatus, { text: string; color: string; icon: keyof typeof Icon.glyphMap }> = {
       accepted: { text: 'Corrida aceita', color: '#4CAF50', icon: 'check-circle' },
-      picking_up: { text: 'Indo buscar pedido', color: '#2196F3', icon: 'bike' },
-      picked_up: { text: 'Pedido coletado', color: '#FF9800', icon: 'package-variant' },
-      delivering: { text: 'A caminho do cliente', color: '#9C27B0', icon: 'truck-delivery' },
-      delivered: { text: 'Entregue', color: '#4CAF50', icon: 'checkbox-marked-circle' },
+      picking_up: { text: 'Indo buscar pedido', color: '#2196F3', icon: 'bicycle' },
+      picked_up: { text: 'Pedido coletado', color: '#FF9800', icon: 'cube' },
+      delivering: { text: 'A caminho do cliente', color: '#9C27B0', icon: 'car' },
+      delivered: { text: 'Entregue', color: '#4CAF50', icon: 'check-circle' },
       canceled: { text: 'Cancelada', color: '#F44336', icon: 'close-circle' },
-      pending: { text: 'Pendente', color: '#666', icon: 'clock' },
-      assigned: { text: 'Atribuída', color: '#666', icon: 'account-check' },
+      pending: { text: 'Pendente', color: '#666', icon: 'timer-outline' },
+      assigned: { text: 'Atribuída', color: '#666', icon: 'account-circle' },
     };
 
     return info[trip.status];
@@ -187,19 +189,23 @@ const DeliveryRouteScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Carregando corrida...</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B35" />
+          <Text style={styles.loadingText}>Carregando corrida...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!trip) {
     return (
-      <View style={styles.errorContainer}>
-        <Icon name="alert-circle" size={64} color="#ccc" />
-        <Text style={styles.errorText}>Corrida não encontrada</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={64} color="#ccc" />
+          <Text style={styles.errorText}>Corrida não encontrada</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -210,7 +216,8 @@ const DeliveryRouteScreen = () => {
   const currentLabel = isPickupPhase ? 'Loja' : 'Cliente';
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <View style={styles.innerContainer}>
       {/* Header com status */}
       <View style={[styles.statusHeader, { backgroundColor: statusInfo.color }]}>
         <Icon name={statusInfo.icon} size={28} color="#fff" />
@@ -220,13 +227,13 @@ const DeliveryRouteScreen = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Mapa simulado ou informações de localização */}
         <View style={styles.mapPlaceholder}>
-          <Icon name="map-marker-radius" size={48} color="#FF6B35" />
+          <Icon name="pin" size={48} color="#FF6B35" />
           <Text style={styles.mapPlaceholderText}>Mapa de navegação</Text>
           <TouchableOpacity
             style={styles.openMapsButton}
             onPress={() => openMaps(currentAddress.latitude, currentAddress.longitude, formatAddress(currentAddress))}
           >
-            <Icon name="google-maps" size={20} color="#fff" />
+            <Icon name="map" size={20} color="#fff" />
             <Text style={styles.openMapsButtonText}>Abrir no Google Maps</Text>
           </TouchableOpacity>
         </View>
@@ -290,7 +297,7 @@ const DeliveryRouteScreen = () => {
 
             {trip.distance && (
               <View style={styles.infoCard}>
-                <Icon name="map-marker-distance" size={24} color="#2196F3" />
+                <Icon name="navigation" size={24} color="#2196F3" />
                 <Text style={styles.infoValue}>{trip.distance.toFixed(1)} km</Text>
                 <Text style={styles.infoLabel}>Distância</Text>
               </View>
@@ -311,7 +318,7 @@ const DeliveryRouteScreen = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Itens do Pedido</Text>
             <View style={styles.orderItems}>
-              {order.items.map((item, index) => (
+              {order.items.map((item: any, index: number) => (
                 <View key={index} style={styles.orderItem}>
                   <Text style={styles.orderItemQty}>{item.quantity}x</Text>
                   <Text style={styles.orderItemName}>{item.name}</Text>
@@ -340,7 +347,7 @@ const DeliveryRouteScreen = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Observações do Cliente</Text>
             <View style={styles.notesBox}>
-              <Icon name="note-text" size={20} color="#666" />
+              <Icon name="clipboard-outline" size={20} color="#666" />
               <Text style={styles.notesText}>{trip.customerNotes}</Text>
             </View>
           </View>
@@ -393,7 +400,8 @@ const DeliveryRouteScreen = () => {
           </TouchableOpacity>
         )}
       </View>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -401,6 +409,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  innerContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

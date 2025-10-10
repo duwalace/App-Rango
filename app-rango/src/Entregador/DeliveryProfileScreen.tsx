@@ -15,8 +15,10 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getDeliveryPerson, updateDeliveryPerson, DeliveryPerson } from '../services/deliveryService';
+import { getPartnerProfile, subscribeToPartnerProfile } from '../services/deliveryOfferService';
 import { useAuth } from '../contexts/AuthContext';
 
 const DeliveryProfileScreen = () => {
@@ -30,6 +32,9 @@ const DeliveryProfileScreen = () => {
   // Estados para edição
   const [phone, setPhone] = useState('');
   const [vehiclePlate, setVehiclePlate] = useState('');
+  
+  // Novo sistema (Fase 1)
+  const [partnerProfile, setPartnerProfile] = useState<any | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -39,14 +44,26 @@ const DeliveryProfileScreen = () => {
     if (!usuarioLogado?.uid) return;
 
     try {
+      // Sistema antigo
       const data = await getDeliveryPerson(usuarioLogado.uid);
       if (data) {
         setDeliveryPerson(data);
         setPhone(data.phone || '');
         setVehiclePlate(data.vehicle?.plate || '');
       }
+
+      // Sistema novo (Fase 1)
+      try {
+        const profileData = await getPartnerProfile(usuarioLogado.uid);
+        if (profileData) {
+          setPartnerProfile(profileData);
+          console.log('✅ Perfil do partner carregado:', profileData.status);
+        }
+      } catch (newSystemError) {
+        console.warn('⚠️ Perfil não encontrado no novo sistema:', newSystemError);
+      }
     } catch (error) {
-      console.error('Erro ao carregar perfil:', error);
+      console.error('❌ Erro ao carregar perfil:', error);
       Alert.alert('Erro', 'Não foi possível carregar o perfil');
     } finally {
       setLoading(false);
@@ -62,6 +79,7 @@ const DeliveryProfileScreen = () => {
         phone,
         vehicle: {
           ...deliveryPerson?.vehicle,
+          type: deliveryPerson?.vehicle?.type || 'bike',
           plate: vehiclePlate,
         },
       });
@@ -123,10 +141,10 @@ const DeliveryProfileScreen = () => {
   };
 
   const getStatusBadge = () => {
-    if (!deliveryPerson) return { label: 'Carregando...', color: '#ccc', icon: 'loading' };
+    if (!deliveryPerson) return { label: 'Carregando...', color: '#ccc', icon: 'hourglass' as keyof typeof Icon.glyphMap };
 
-    const badges: Record<string, { label: string; color: string; icon: string }> = {
-      pending: { label: 'Aguardando Aprovação', color: '#FF9800', icon: 'clock-alert' },
+    const badges: Record<string, { label: string; color: string; icon: keyof typeof Icon.glyphMap }> = {
+      pending: { label: 'Aguardando Aprovação', color: '#FF9800', icon: 'timer-outline' },
       approved: { label: 'Aprovado', color: '#4CAF50', icon: 'check-circle' },
       rejected: { label: 'Rejeitado', color: '#F44336', icon: 'close-circle' },
       blocked: { label: 'Bloqueado', color: '#F44336', icon: 'lock' },
@@ -137,30 +155,35 @@ const DeliveryProfileScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Carregando perfil...</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B35" />
+          <Text style={styles.loadingText}>Carregando perfil...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!deliveryPerson) {
     return (
-      <View style={styles.errorContainer}>
-        <Icon name="alert-circle" size={64} color="#ccc" />
-        <Text style={styles.errorText}>Perfil não encontrado</Text>
-      </View>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={64} color="#ccc" />
+          <Text style={styles.errorText}>Perfil não encontrado</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   const statusBadge = getStatusBadge();
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScrollView style={styles.scrollContent}>
       {/* Header com avatar e status */}
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          {deliveryPerson.documents?.profilePhoto ? (
+          {deliveryPerson.documents?.cnh?.imageUrl ? (
             <Icon name="account-circle" size={80} color="#FF6B35" />
           ) : (
             <View style={styles.avatarPlaceholder}>
@@ -346,8 +369,10 @@ const DeliveryProfileScreen = () => {
         <Text style={styles.logoutButtonText}>Sair da Conta</Text>
       </TouchableOpacity>
 
-      <View style={{ height: 40 }} />
+      {/* Espaçamento para SafeArea inferior */}
+      <View style={{ height: 100 }} />
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -355,6 +380,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollContent: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,

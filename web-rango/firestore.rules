@@ -145,6 +145,142 @@ service cloud.firestore {
     }
     
     // ==========================================
+    // COLEÇÃO: delivery_partners
+    // ==========================================
+    match /delivery_partners/{partnerId} {
+      // Leitura: 
+      // - Próprio entregador vê seus dados
+      // - Lojas veem entregador atribuído ao seu pedido
+      // - Admin vê tudo
+      allow read: if isSignedIn() && (
+        getUserData().uid == resource.data.userId ||
+        isAdmin() ||
+        // Loja vê entregador do seu pedido (validar via order)
+        (getUserData().role == 'dono_da_loja' && 
+         exists(/databases/$(database)/documents/orders/$(getUserData().storeId + '_' + partnerId)))
+      );
+      
+      // Criar: apenas durante signup (próprio UID)
+      allow create: if isSignedIn() && 
+                       request.auth.uid == request.resource.data.userId;
+      
+      // Atualizar: 
+      // - Próprio entregador pode atualizar location e operational_status
+      // - Admin pode atualizar tudo
+      allow update: if isSignedIn() && (
+        // Entregador atualiza apenas campos permitidos
+        (getUserData().uid == resource.data.userId && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['current_location', 'last_location_update', 'operational_status', 'current_order_id', 'last_login', 'metadata'])) ||
+        // Admin pode atualizar tudo
+        isAdmin()
+      );
+      
+      // Deletar: apenas admin
+      allow delete: if isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: delivery_offers
+    // ==========================================
+    match /delivery_offers/{offerId} {
+      // Leitura:
+      // - Entregadores veem ofertas que estão no visible_to_partners
+      // - Loja vê ofertas de seus pedidos
+      // - Admin vê tudo
+      allow read: if isSignedIn() && (
+        request.auth.uid in resource.data.visible_to_partners ||
+        getUserData().storeId == resource.data.store_id ||
+        isAdmin()
+      );
+      
+      // Criar: apenas via Cloud Function ou Admin
+      allow create: if isAdmin();
+      
+      // Atualizar:
+      // - Entregador pode aceitar oferta (mudar status para accepted)
+      // - Cloud Function/Admin pode atualizar tudo
+      allow update: if isSignedIn() && (
+        // Entregador aceita oferta
+        (request.auth.uid in resource.data.visible_to_partners &&
+         resource.data.status == 'open' &&
+         request.resource.data.status == 'accepted' &&
+         request.resource.data.accepted_by == request.auth.uid) ||
+        // Admin
+        isAdmin()
+      );
+      
+      // Deletar: apenas admin
+      allow delete: if isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: delivery_earnings
+    // ==========================================
+    match /delivery_earnings/{earningId} {
+      // Leitura: apenas próprio entregador e admin
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.partner_id ||
+        isAdmin()
+      );
+      
+      // Criar/Atualizar/Deletar: apenas Cloud Function ou Admin
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: delivery_zones
+    // ==========================================
+    match /delivery_zones/{zoneId} {
+      // Leitura: todos (necessário para calcular fees)
+      allow read: if true;
+      
+      // Escrita: apenas admin
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: withdrawal_requests
+    // ==========================================
+    match /withdrawal_requests/{requestId} {
+      // Leitura: próprio entregador e admin
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.partner_id ||
+        isAdmin()
+      );
+      
+      // Criar: próprio entregador
+      allow create: if isSignedIn() && 
+                       request.auth.uid == request.resource.data.partner_id &&
+                       request.resource.data.status == 'pending';
+      
+      // Atualizar: apenas admin (processar saque)
+      allow update: if isAdmin();
+      
+      // Deletar: apenas admin
+      allow delete: if isAdmin();
+    }
+    
+    // ==========================================
+    // COLEÇÃO: delivery_ratings
+    // ==========================================
+    match /delivery_ratings/{ratingId} {
+      // Leitura: cliente que criou, entregador avaliado, admin
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.customer_id ||
+        request.auth.uid == resource.data.partner_id ||
+        isAdmin()
+      );
+      
+      // Criar: apenas cliente do pedido
+      allow create: if isSignedIn() && 
+                       request.auth.uid == request.resource.data.customer_id;
+      
+      // Atualizar/Deletar: apenas admin
+      allow update, delete: if isAdmin();
+    }
+    
+    // ==========================================
     // BLOQUEIO PADRÃO
     // ==========================================
     // Qualquer coleção não especificada: BLOQUEADA

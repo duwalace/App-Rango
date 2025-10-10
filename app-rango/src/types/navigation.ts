@@ -78,10 +78,10 @@ export type AuthStackParamList = {
 };
 
 export type DeliveryStackParamList = {
-  Dashboard: undefined;
-  Entregas: undefined;
-  Carteira: undefined;
-  Perfil: undefined;
+  Início: undefined;
+  Extrato: undefined;
+  Ajuda: undefined;
+  Mais: undefined;
   DeliveryRouteScreen: { tripId: string };
   DeliveryTripDetails: { tripId: string };
   DeliveryHistory: undefined;

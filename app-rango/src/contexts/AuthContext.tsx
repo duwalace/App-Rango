@@ -8,6 +8,8 @@ import { UserRole } from '../services/authService';
 
 interface AppUser extends User {
   role: UserRole;
+  nome?: string;
+  phone?: string;
 }
 
 interface AuthContextType {
@@ -44,8 +46,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             const role = userData.role as UserRole;
+            const nome = userData.nome;
+            const phone = userData.phone;
             console.log('Dados do usuário encontrados:', role);
-            setCurrentUser({ ...user, role });
+            setCurrentUser({ ...user, role, nome, phone });
             console.log('✅ Estado atualizado - usuário logado');
           } else {
             console.log('❌ Documento do usuário não existe, fazendo logout...');

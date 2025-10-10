@@ -1,3 +1,6 @@
+// IMPORTANTE: Importar supressor de warnings ANTES de tudo
+import './src/utils/suppressWarnings';
+
 import React from 'react';
 import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -19,7 +22,10 @@ import DeliverySignupScreen from './src/Entregador/DeliverySignupScreen';
 import DeliveryVerificationScreen from './src/Entregador/DeliveryVerificationScreen';
 import DeliveryDocumentsScreen from './src/Entregador/DeliveryDocumentsScreen';
 import DeliveryConfirmationScreen from './src/Entregador/DeliveryConfirmationScreen';
-import DeliveryDashboardScreen from './src/Entregador/DeliveryDashboardScreen';
+import DeliveryHomeScreen from './src/Entregador/DeliveryHomeScreen';
+import DeliveryStatementScreen from './src/Entregador/DeliveryStatementScreen';
+import DeliveryHelpScreen from './src/Entregador/DeliveryHelpScreen';
+import DeliveryMoreScreen from './src/Entregador/DeliveryMoreScreen';
 import DeliveryProfileScreen from './src/Entregador/DeliveryProfileScreen';
 import DeliveryTripDetailsScreen from './src/Entregador/DeliveryTripDetailsScreen';
 import DeliveryRouteScreen from './src/Entregador/DeliveryRouteScreen';
@@ -156,26 +162,28 @@ function MainNavigator() {
           tabBarIcon: ({ focused, color, size }) => {
             let iconName: keyof typeof Ionicons.glyphMap;
 
-            if (route.name === 'Dashboard') {
-              iconName = focused ? 'speedometer' : 'speedometer-outline';
-            } else if (route.name === 'Entregas') {
-              iconName = focused ? 'bicycle' : 'bicycle-outline';
-            } else if (route.name === 'Carteira') {
-              iconName = focused ? 'wallet' : 'wallet-outline';
-            } else if (route.name === 'Perfil') {
-              iconName = focused ? 'person' : 'person-outline';
+            if (route.name === 'Início') {
+              iconName = focused ? 'home' : 'home-outline';
+            } else if (route.name === 'Extrato') {
+              iconName = focused ? 'receipt' : 'receipt-outline';
+            } else if (route.name === 'Ajuda') {
+              iconName = focused ? 'help-circle' : 'help-circle-outline';
+            } else if (route.name === 'Mais') {
+              iconName = focused ? 'menu' : 'menu-outline';
             } else {
-              iconName = 'speedometer-outline';
+              iconName = 'home-outline';
             }
 
             return <Ionicons name={iconName} size={size} color={color} />;
           },
-          tabBarActiveTintColor: '#EA1D2C',
-          tabBarInactiveTintColor: 'gray',
+          tabBarActiveTintColor: '#FF6B35',
+          tabBarInactiveTintColor: '#666',
           tabBarStyle: {
             backgroundColor: 'white',
             borderTopWidth: 1,
             borderTopColor: '#E5E5E5',
+            paddingTop: 8,
+            // Remove height e paddingBottom fixos para respeitar SafeArea
           },
           tabBarLabelStyle: {
             fontSize: 12,
@@ -183,10 +191,10 @@ function MainNavigator() {
           },
         })}
       >
-        <Tab.Screen name="Dashboard" component={DeliveryDashboardScreen} />
-        <Tab.Screen name="Entregas" component={DeliveryHistoryScreen} />
-        <Tab.Screen name="Carteira" component={DeliveryWalletScreen} />
-        <Tab.Screen name="Perfil" component={ProfileStack} />
+        <Tab.Screen name="Início" component={DeliveryHomeScreen} />
+        <Tab.Screen name="Extrato" component={DeliveryStatementScreen} />
+        <Tab.Screen name="Ajuda" component={DeliveryHelpScreen} />
+        <Tab.Screen name="Mais" component={DeliveryMoreScreen} />
       </Tab.Navigator>
     );
   }

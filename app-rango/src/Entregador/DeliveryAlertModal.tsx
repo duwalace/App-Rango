@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Trip, acceptTrip, rejectTrip, assignTrip } from '../services/tripService';
 import { getDeliveryPerson } from '../services/deliveryService';
+import { RootStackParamList } from '../types/navigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -29,7 +31,7 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({
   trip,
   deliveryPersonId 
 }) => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [timeLeft, setTimeLeft] = useState(30);
   const [progressAnim] = useState(new Animated.Value(1));
   const [accepting, setAccepting] = useState(false);
@@ -91,7 +93,7 @@ const DeliveryAlertModal: React.FC<DeliveryAlertModalProps> = ({
       onClose();
       
       // Navegar para tela de detalhes da corrida
-      navigation.navigate('DeliveryRouteScreen' as never, { tripId: trip.id } as never);
+      (navigation as any).navigate('DeliveryRoute', { tripId: trip.id });
       
     } catch (error) {
       console.error('❌ Erro ao aceitar corrida:', error);

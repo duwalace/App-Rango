@@ -57,8 +57,10 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onPress }) => {
       preparing: 'Preparando',
       ready: 'Pronto',
       in_delivery: 'Em Entrega',
+      out_for_delivery: 'Saiu para Entrega',
       delivered: 'Entregue',
       cancelled: 'Cancelado',
+      canceled: 'Cancelado',
     };
     return labels[status] || status;
   };

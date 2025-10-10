@@ -41,6 +41,7 @@ import DeliveryAreaSettings from "./dashboard/settings/DeliveryArea";
 import BankingSettings from "./dashboard/settings/Banking";
 import UsersSettings from "./dashboard/settings/Users";
 import Customers from "./dashboard/Customers";
+import ActiveDeliveries from "./ActiveDeliveries";
 
 const Dashboard = () => {
   const { user, loading } = useAuth();
@@ -109,6 +110,9 @@ const Dashboard = () => {
               <Route path="settings/delivery-area" element={<DeliveryAreaSettings />} />
               <Route path="settings/banking" element={<BankingSettings />} />
               <Route path="settings/users" element={<UsersSettings />} />
+              
+              {/* ENTREGAS */}
+              <Route path="active-deliveries" element={<ActiveDeliveries />} />
               
               {/* ROTAS LEGACY */}
               <Route path="delivery" element={<Delivery />} />

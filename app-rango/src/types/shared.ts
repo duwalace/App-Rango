@@ -126,8 +126,10 @@ export type OrderStatus =
   | 'preparing' 
   | 'ready' 
   | 'in_delivery'
+  | 'out_for_delivery'
   | 'delivered' 
-  | 'cancelled';
+  | 'cancelled'
+  | 'canceled';
 
 export type PaymentMethod = 
   | 'credit_card' 

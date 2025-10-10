@@ -77,10 +77,10 @@ const FavoritesScreen: React.FC = () => {
         id: item.id,
         name: item.name,
         image: item.coverImage || item.logo,
+        logo: item.logo,
         rating: item.rating || 0,
         deliveryTime: item.delivery?.deliveryTime || '30-40 min',
-        deliveryFee: item.delivery?.deliveryFee || 0,
-        category: item.category || '',
+        deliveryFee: `R$ ${(item.delivery?.deliveryFee || 0).toFixed(2)}`,
         isFavorite: true, // Sempre true nesta tela
       }}
       onPress={() => handleStorePress(item)}

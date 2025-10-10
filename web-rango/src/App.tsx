@@ -9,6 +9,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import SeedData from "./pages/SeedData";
+import SejaEntregador from "./pages/SejaEntregador";
+import CadastroSucesso from "./pages/CadastroSucesso";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/seja-entregador" element={<SejaEntregador />} />
+          <Route path="/cadastro-sucesso" element={<CadastroSucesso />} />
           <Route path="/seed" element={<SeedData />} />
           <Route path="/dashboard/*" element={<Dashboard />} />
           <Route path="/admin/*" element={<AdminDashboard />} />

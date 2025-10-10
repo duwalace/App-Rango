@@ -338,10 +338,15 @@ export const updateAvailability = async (
   availability: DeliveryAvailability
 ): Promise<void> => {
   try {
-    await updateDoc(doc(db, 'deliveryPersons', id), {
-      availability,
-      updatedAt: serverTimestamp(),
-    });
+    // Usar setDoc com merge para criar se não existir
+    await setDoc(
+      doc(db, 'deliveryPersons', id), 
+      {
+        availability,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true } // Cria se não existir, atualiza se existir
+    );
 
     console.log('✅ Disponibilidade atualizada:', id, availability);
   } catch (error: any) {

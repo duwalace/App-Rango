@@ -14,9 +14,11 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getDeliveryPersonTrips, Trip } from '../services/tripService';
 import { getDeliveryPerson, DeliveryPerson } from '../services/deliveryService';
+import { getPartnerEarnings, getPartnerProfile } from '../services/deliveryOfferService';
 import { useAuth } from '../contexts/AuthContext';
 
 const DeliveryWalletScreen = () => {
@@ -27,6 +29,11 @@ const DeliveryWalletScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  
+  // Novos estados para integração Fase 1
+  const [earnings, setEarnings] = useState<any[]>([]);
+  const [partnerProfile, setPartnerProfile] = useState<any | null>(null);
+  const [availableBalance, setAvailableBalance] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -36,6 +43,7 @@ const DeliveryWalletScreen = () => {
     if (!usuarioLogado?.uid) return;
 
     try {
+      // Buscar dados do sistema antigo (compatibilidade)
       const [personData, tripsData] = await Promise.all([
         getDeliveryPerson(usuarioLogado.uid),
         getDeliveryPersonTrips(usuarioLogado.uid),
@@ -43,8 +51,34 @@ const DeliveryWalletScreen = () => {
 
       setDeliveryPerson(personData);
       setTrips(tripsData.filter(t => t.status === 'delivered'));
+
+      // Buscar dados do sistema novo (Fase 1)
+      try {
+        const [earningsData, profileData] = await Promise.all([
+          getPartnerEarnings(usuarioLogado.uid), // Todos os earnings
+          getPartnerProfile(usuarioLogado.uid),   // Perfil completo
+        ]);
+
+        setEarnings(earningsData);
+        setPartnerProfile(profileData);
+
+        // Calcular saldo disponível (earnings com status 'pending' ou 'paid')
+        const available = earningsData
+          .filter(e => e.status === 'paid')
+          .reduce((sum, e) => sum + (e.net_amount || 0), 0);
+        
+        setAvailableBalance(available);
+
+        console.log('✅ Dados financeiros carregados:', {
+          earnings: earningsData.length,
+          available: available,
+        });
+      } catch (newSystemError) {
+        console.warn('⚠️ Erro ao carregar dados do novo sistema:', newSystemError);
+        // Fallback para dados antigos
+      }
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('❌ Erro ao carregar dados:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -129,18 +163,20 @@ const DeliveryWalletScreen = () => {
   }, {});
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />}
-    >
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />}
+      >
       {/* Saldo principal */}
       <View style={styles.balanceCard}>
         <View style={styles.balanceHeader}>
           <Icon name="wallet" size={32} color="#fff" />
-          <Text style={styles.balanceLabel}>Saldo Total</Text>
+          <Text style={styles.balanceLabel}>Saldo Disponível</Text>
         </View>
         <Text style={styles.balanceValue}>
-          R$ {deliveryPerson?.stats?.totalEarnings?.toFixed(2) || '0.00'}
+          R$ {(partnerProfile?.metrics?.current_balance || availableBalance || deliveryPerson?.stats?.totalEarnings || 0).toFixed(2)}
         </Text>
         <TouchableOpacity style={styles.withdrawButton} onPress={handleWithdraw}>
           <Icon name="bank-transfer" size={20} color="#FF6B35" />
@@ -262,8 +298,10 @@ const DeliveryWalletScreen = () => {
         </View>
       </View>
 
-      <View style={{ height: 40 }} />
+      {/* Espaçamento para SafeArea inferior */}
+      <View style={{ height: 120 }} />
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -271,6 +309,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
   },
   balanceCard: {
     backgroundColor: '#FF6B35',

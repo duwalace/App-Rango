@@ -10,13 +10,15 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../contexts/CartContext';
 import CartHeader from '../components/CartHeader';
 import CartItem from '../components/CartItem';
+import { HomeStackParamList } from '../types/navigation';
 
 const CartScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const { state, updateQuantity, removeItem, clearCart, getItemCount } = useCart();
   
   const { items, store, subtotal, deliveryFee, serviceFee, total } = state;

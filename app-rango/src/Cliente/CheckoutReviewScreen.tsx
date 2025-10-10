@@ -87,7 +87,7 @@ const CheckoutReviewScreen: React.FC = () => {
         customerId: user.uid,
         customerName: user.nome || 'Cliente',
         customerPhone: user.phone || '',
-        customerEmail: user.email,
+        customerEmail: user.email || undefined,
         items: orderItems,
         subtotal: cart.subtotal,
         deliveryFee: cart.deliveryFee,

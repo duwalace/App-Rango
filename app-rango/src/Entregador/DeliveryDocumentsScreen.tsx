@@ -36,7 +36,6 @@ interface RouteParams {
 const DeliveryDocumentsScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { login } = useAuth();
   const { userData } = (route.params as RouteParams) || {};
   
   // Debug: verificar se userData foi recebido
@@ -269,10 +268,8 @@ const DeliveryDocumentsScreen: React.FC = () => {
                 console.log('User ID:', user.uid);
                 console.log('Role:', role);
                 
-                // Fazer login automático
-                console.log('Fazendo login automático...');
-                await login(user, role);
-                console.log('Login automático concluído!');
+                // Login automático não é necessário - o usuário já está autenticado
+                console.log('Usuário já autenticado!');
               } else {
                 console.log('ERRO: userData não existe!');
                 Alert.alert(

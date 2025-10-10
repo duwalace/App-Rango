@@ -9,8 +9,9 @@ interface ReviewCardProps {
 }
 
 const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
-  const formatDate = (date: Date) => {
-    const d = date instanceof Date ? date : new Date(date);
+  const formatDate = (date: Date | any) => {
+    // Converter Timestamp do Firebase para Date se necessário
+    const d = date?.toDate ? date.toDate() : (date instanceof Date ? date : new Date(date));
     return d.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'short',

@@ -27,7 +27,6 @@ interface RouteParams {
 const DeliveryVerificationScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { login } = useAuth();
   const { email, phone, userData } = (route.params as RouteParams) || {};
   
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -92,7 +91,7 @@ const DeliveryVerificationScreen: React.FC = () => {
         console.log('Código verificado com sucesso! Navegando para documentos...');
         
         // Navegar para tela de documentos
-        navigation.navigate('DeliveryDocuments' as never, {
+        (navigation as any).navigate('DeliveryDocuments', {
           userData: userData
         });
       }
@@ -169,7 +168,7 @@ const DeliveryVerificationScreen: React.FC = () => {
                 {code.map((digit, index) => (
                   <TextInput
                     key={index}
-                    ref={ref => inputRefs.current[index] = ref}
+                    ref={ref => { inputRefs.current[index] = ref; }}
                     style={[
                       styles.codeInput,
                       digit ? styles.codeInputFilled : null

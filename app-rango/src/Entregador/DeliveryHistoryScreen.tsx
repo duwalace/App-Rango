@@ -14,10 +14,12 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { MaterialCommunityIcons as Icon } from '@expo/vector-icons';
 import { getDeliveryPersonTrips, Trip } from '../services/tripService';
+import { getDeliveryHistory } from '../services/deliveryOfferService';
 import { useAuth } from '../contexts/AuthContext';
 
 type DeliveryStackParamList = {
@@ -41,6 +43,9 @@ const DeliveryHistoryScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('all');
+  
+  // Novo sistema (Fase 1)
+  const [deliveryHistory, setDeliveryHistory] = useState<any[]>([]);
 
   useEffect(() => {
     loadTrips();
@@ -54,14 +59,23 @@ const DeliveryHistoryScreen = () => {
     if (!usuarioLogado?.uid) return;
 
     try {
+      // Buscar do sistema antigo
       const data = await getDeliveryPersonTrips(usuarioLogado.uid);
-      // Filtrar apenas corridas finalizadas (entregues ou canceladas)
       const finishedTrips = data.filter(
         trip => trip.status === 'delivered' || trip.status === 'canceled'
       );
       setTrips(finishedTrips);
+
+      // Buscar do sistema novo (Fase 1)
+      try {
+        const historyData = await getDeliveryHistory(usuarioLogado.uid, 50);
+        setDeliveryHistory(historyData);
+        console.log('✅ Histórico carregado:', historyData.length, 'entregas');
+      } catch (newSystemError) {
+        console.warn('⚠️ Erro ao carregar histórico do novo sistema:', newSystemError);
+      }
     } catch (error) {
-      console.error('Erro ao carregar histórico:', error);
+      console.error('❌ Erro ao carregar histórico:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -95,9 +109,9 @@ const DeliveryHistoryScreen = () => {
 
   const getStatusBadge = (status: string) => {
     if (status === 'delivered') {
-      return { label: 'Entregue', color: '#4CAF50', icon: 'check-circle' };
+      return { label: 'Entregue', color: '#4CAF50', icon: 'checkmark-circle' as keyof typeof Icon.glyphMap };
     }
-    return { label: 'Cancelada', color: '#F44336', icon: 'close-circle' };
+    return { label: 'Cancelada', color: '#F44336', icon: 'close-circle' as keyof typeof Icon.glyphMap };
   };
 
   const calculateStats = () => {
@@ -171,15 +185,17 @@ const DeliveryHistoryScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Carregando histórico...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6B35" />
+          <Text style={styles.loadingText}>Carregando histórico...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header com estatísticas */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
@@ -236,7 +252,7 @@ const DeliveryHistoryScreen = () => {
         data={filteredTrips}
         renderItem={renderTripItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6B35']} />
         }
@@ -254,7 +270,7 @@ const DeliveryHistoryScreen = () => {
           </View>
         }
       />
-    </View>
+    </SafeAreaView>
   );
 };
 

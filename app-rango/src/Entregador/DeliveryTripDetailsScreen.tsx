@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
 
 interface TripDetailsScreenProps {
   route?: {
@@ -21,7 +23,7 @@ interface TripDetailsScreenProps {
 }
 
 const DeliveryTripDetailsScreen: React.FC<TripDetailsScreenProps> = ({ route }) => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   // Dados simulados da corrida (normalmente viriam dos parâmetros da rota)
   const [tripData] = useState({
@@ -54,10 +56,9 @@ const DeliveryTripDetailsScreen: React.FC<TripDetailsScreenProps> = ({ route }) 
   const MapsToRoute = (coordinates: { latitude: number; longitude: number }) => {
     console.log('Iniciando rota para:', coordinates);
     // Navegar para tela de rota/navegação
-    navigation.navigate('DeliveryRoute' as never, { 
-      destination: coordinates,
-      tripData: tripData 
-    } as never);
+    (navigation as any).navigate('DeliveryRoute', { 
+      tripId: tripData.orderId
+    });
   };
 
   const handleStartRoute = () => {
@@ -65,7 +66,7 @@ const DeliveryTripDetailsScreen: React.FC<TripDetailsScreenProps> = ({ route }) 
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 

@@ -11,13 +11,16 @@ import {
   Linking,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { subscribeToOrder, cancelOrder } from '../services/orderService';
 import { Order } from '../types/shared';
 import OrderStatusTracker from '../components/OrderStatusTracker';
+import DeliveryTracker from '../components/DeliveryTracker';
+import { HomeStackParamList } from '../types/navigation';
 
 const OrderDetailsScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const route = useRoute<any>();
 
   const { orderId } = route.params;
@@ -159,6 +162,11 @@ const OrderDetailsScreen: React.FC = () => {
         <View style={styles.section}>
           <OrderStatusTracker currentStatus={order.status} />
         </View>
+
+        {/* Rastreamento de Entrega em Tempo Real */}
+        {(order.status === 'out_for_delivery' || order.status === 'in_delivery') && (
+          <DeliveryTracker orderId={order.id} />
+        )}
 
         {/* Informações da Loja */}
         <View style={styles.section}>

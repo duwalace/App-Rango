@@ -27,6 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { subscribeToActiveStoreOrders, updateOrderStatus } from "@/services/orderService";
 import { Order, OrderStatus } from "@/types/shared";
 import { useToast } from "@/hooks/use-toast";
+import { createDeliveryOffer } from "@/services/deliveryOfferService";
 import {
   Select,
   SelectContent,
@@ -54,6 +55,7 @@ const OrdersActive = () => {
   const [updating, setUpdating] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'kanban'>('all');
+  const [requestingDelivery, setRequestingDelivery] = useState<string | null>(null);
   
   // Ref para rastrear contagem anterior de pedidos
   const previousOrderCount = useRef(0);
@@ -280,6 +282,31 @@ const OrdersActive = () => {
     return workflow[currentStatus] || [];
   };
 
+  // Solicitar entregador para pedido
+  const handleRequestDelivery = async (order: Order) => {
+    if (!order.id) return;
+    
+    setRequestingDelivery(order.id);
+    try {
+      await createDeliveryOffer(order);
+      
+      toast({
+        title: "🚴 Entregador Solicitado!",
+        description: "Procurando entregador disponível na região...",
+        duration: 5000,
+      });
+    } catch (error: any) {
+      console.error('❌ Erro ao solicitar entregador:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível solicitar entregador",
+        variant: "destructive",
+      });
+    } finally {
+      setRequestingDelivery(null);
+    }
+  };
+
   // Calcular estatísticas
   const stats = useMemo(() => {
     const totalOrders = activeOrders.length;
@@ -428,13 +455,38 @@ const OrdersActive = () => {
               <p className="text-xs text-muted-foreground">Total</p>
               <p className="text-lg font-bold text-primary">{formatCurrency(order.total)}</p>
             </div>
-            <Button 
-              onClick={() => handleOpenStatusDialog(order)} 
-              size="sm"
-              variant="default"
-            >
-              Atualizar Status
-            </Button>
+            <div className="flex gap-2">
+              {/* Botão Solicitar Entregador (apenas quando pronto) */}
+              {order.status === 'ready' && (
+                <Button 
+                  onClick={() => handleRequestDelivery(order)} 
+                  size="sm"
+                  variant="outline"
+                  disabled={requestingDelivery === order.id}
+                  className="bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-300"
+                >
+                  {requestingDelivery === order.id ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-700 mr-2"></div>
+                      Procurando...
+                    </>
+                  ) : (
+                    <>
+                      <Bike className="h-4 w-4 mr-2" />
+                      Solicitar Entregador
+                    </>
+                  )}
+                </Button>
+              )}
+              
+              <Button 
+                onClick={() => handleOpenStatusDialog(order)} 
+                size="sm"
+                variant="default"
+              >
+                Atualizar Status
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -1,7 +1,7 @@
 /**
  * DeliveryManagement.tsx
  * Painel Admin - Gestão completa de entregadores
- * Aprovação de cadastros, monitoramento em tempo real, histórico
+ * Nova arquitetura com delivery_partners e Cloud Functions
  */
 
 import { useState, useEffect } from "react";
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -47,23 +48,34 @@ import {
   Ban,
   Shield,
   RefreshCw,
-  FileText,
   Phone,
   Mail,
   MapPin,
   TrendingUp,
   User,
   CreditCard,
-  Wallet,
-  Calendar,
   Car,
   Building2,
   IdCard,
-  AlertTriangle
+  AlertTriangle,
+  Percent
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, getDocs, doc, updateDoc, onSnapshot, getDoc, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import { 
+  DeliveryPartner, 
+  DeliveryPartnerFilters,
+  DeliveryPartnerStats
+} from "@/types/delivery";
+import {
+  getDeliveryPartners,
+  getDeliveryPartnerById,
+  getDeliveryPartnerStats,
+  approveDeliveryPartner,
+  rejectDeliveryPartner,
+  suspendDeliveryPartner,
+  reactivateDeliveryPartner
+} from "@/services/deliveryPartnerService";
 
 interface DeliveryPerson {
   id: string;

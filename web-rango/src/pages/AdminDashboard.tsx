@@ -11,6 +11,7 @@ import PlatformSettings from "./admin/PlatformSettings";
 import OperationsSupport from "./admin/OperationsSupport";
 import StoreTypesManagement from "./admin/StoreTypesManagement";
 import DeliveryManagement from "./admin/DeliveryManagement";
+import DeliveryPartnersManagement from "./admin/DeliveryPartnersManagement";
 
 const AdminDashboard = () => {
   const { user, loading } = useAuth();
@@ -44,6 +45,7 @@ const AdminDashboard = () => {
               <Route path="stores" element={<StoresManagement />} />
               <Route path="users" element={<UsersManagement />} />
               <Route path="delivery" element={<DeliveryManagement />} />
+              <Route path="delivery-partners" element={<DeliveryPartnersManagement />} />
               <Route path="financial" element={<FinancialManagement />} />
               <Route path="store-types" element={<StoreTypesManagement />} />
               <Route path="settings" element={<PlatformSettings />} />

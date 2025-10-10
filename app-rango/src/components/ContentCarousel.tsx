@@ -32,7 +32,7 @@ function ContentCarousel<T = any>({
       <FlatList
         data={data}
         renderItem={renderItem}
-        keyExtractor={(item, index) => item?.id?.toString() || index.toString()}
+        keyExtractor={(item, index) => (item && typeof item === 'object' && 'id' in item ? (item as any).id?.toString() : index.toString())}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
