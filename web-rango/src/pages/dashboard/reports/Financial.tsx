@@ -1,197 +1,299 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, CreditCard, Wallet, Download } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DollarSign,
+  Download,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  FileText,
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import {
+  getFinancialReport,
+  getPresetDateRanges,
+  exportToCSV,
+  type DateRange,
+  type FinancialReport,
+} from '@/services/analyticsService';
+import { Badge } from '@/components/ui/badge';
 
 const Financial = () => {
-  const financialData = [
-    { month: "Jan", receita: 15430, despesas: 8200 },
-    { month: "Fev", receita: 18250, despesas: 9100 },
-    { month: "Mar", receita: 21400, despesas: 10300 },
-    { month: "Abr", receita: 19800, despesas: 9800 },
-    { month: "Mai", receita: 23650, despesas: 11200 },
-    { month: "Jun", receita: 26100, despesas: 12400 },
-  ];
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  const kpis = [
-    {
-      title: "Receita Total",
-      value: "R$ 124,630",
-      change: "+18.2%",
-      icon: DollarSign,
-      color: "text-green-600",
-    },
-    {
-      title: "Despesas Totais", 
-      value: "R$ 61,000",
-      change: "+12.1%",
-      icon: CreditCard,
-      color: "text-red-600",
-    },
-    {
-      title: "Lucro Líquido",
-      value: "R$ 63,630",
-      change: "+25.3%",
-      icon: TrendingUp,
-      color: "text-green-600",
-    },
-    {
-      title: "Margem de Lucro",
-      value: "51.1%",
-      change: "+3.2%",
-      icon: Wallet,
-      color: "text-blue-600",
-    },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>(getPresetDateRanges().thisMonth);
+  const [report, setReport] = useState<FinancialReport | null>(null);
 
-  const expenses = [
-    { category: "Ingredientes", amount: "R$ 28,500", percentage: 47 },
-    { category: "Pessoal", amount: "R$ 18,300", percentage: 30 },
-    { category: "Aluguel", amount: "R$ 8,500", percentage: 14 },
-    { category: "Marketing", amount: "R$ 3,200", percentage: 5 },
-    { category: "Outros", amount: "R$ 2,500", percentage: 4 },
-  ];
+  useEffect(() => {
+    if (user?.storeId) {
+      loadFinancialReport();
+    }
+  }, [user?.storeId, dateRange]);
+
+  const loadFinancialReport = async () => {
+    if (!user?.storeId) return;
+
+    try {
+      setLoading(true);
+      console.log('💰 Carregando relatório financeiro...');
+
+      const data = await getFinancialReport(user.storeId, dateRange);
+      setReport(data);
+
+      console.log('✅ Relatório financeiro carregado');
+    } catch (error) {
+      console.error('❌ Erro ao carregar relatório:', error);
+      toast({
+        title: 'Erro ao carregar dados',
+        description: 'Não foi possível carregar o relatório financeiro',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    if (!report || report.orders.length === 0) {
+      toast({
+        title: 'Nenhum dado para exportar',
+        description: 'Não há pedidos no período selecionado',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const dataToExport = report.orders.map((order) => ({
+      Data: order.date.toLocaleDateString('pt-BR'),
+      'ID Pedido': order.id,
+      Cliente: order.customerName,
+      'Valor Itens': order.itemsTotal.toFixed(2),
+      'Taxa Entrega': order.deliveryFee.toFixed(2),
+      'Comissão (12%)': order.platformFee.toFixed(2),
+      'Valor Líquido': order.netAmount.toFixed(2),
+      Status: order.status,
+    }));
+
+    exportToCSV(dataToExport, `relatorio-financeiro-${new Date().toISOString().split('T')[0]}`);
+
+    toast({
+      title: '✅ Exportado com sucesso!',
+      description: `${report.orders.length} pedidos exportados para CSV`,
+    });
+  };
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' }> = {
+      completed: { label: 'Concluído', variant: 'default' },
+      delivered: { label: 'Entregue', variant: 'default' },
+      pending: { label: 'Pendente', variant: 'secondary' },
+      cancelled: { label: 'Cancelado', variant: 'destructive' },
+    };
+
+    const statusInfo = statusMap[status] || { label: status, variant: 'secondary' };
+
+    return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="text-center text-muted-foreground py-12">
+        Nenhum dado disponível para o período selecionado
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Relatório Financeiro</h1>
-          <p className="text-muted-foreground mt-2">
-            Visão completa das finanças do seu negócio
+          <h1 className="text-3xl font-bold">Relatório Financeiro</h1>
+          <p className="text-muted-foreground mt-1">
+            Visão detalhada de todas as transações
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="h-4 w-4" />
-            Exportar PDF
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <Button onClick={handleExport} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Exportar CSV
           </Button>
-          <Button>Gerar Relatório</Button>
         </div>
       </div>
 
-      {/* KPIs Financeiros */}
-      <div className="grid md:grid-cols-4 gap-6">
-        {kpis.map((kpi) => (
-          <Card key={kpi.title} className="shadow-card">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{kpi.title}</p>
-                  <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
-                  <span className={`text-xs font-medium ${kpi.color}`}>
-                    {kpi.change} vs. mês anterior
-                  </span>
-                </div>
-                <kpi.icon className="h-8 w-8 text-primary" />
+      {/* Resumo Financeiro */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Faturamento Bruto</p>
+                <p className="text-2xl font-bold mt-2">
+                  {formatCurrency(report.summary.grossRevenue)}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Gráfico de Receita vs Despesas */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle>Receita vs Despesas (6 meses)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {financialData.map((data) => (
-                <div key={data.month} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{data.month}</span>
-                    <span className="text-muted-foreground">
-                      R$ {(data.receita - data.despesas).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <div className="flex gap-1 h-8 rounded overflow-hidden">
-                      <div 
-                        className="bg-green-500 flex items-center justify-center text-xs text-white font-medium"
-                        style={{ width: `${(data.receita / 30000) * 100}%` }}
-                      >
-                        R$ {(data.receita / 1000).toFixed(0)}k
-                      </div>
-                      <div 
-                        className="bg-red-500 flex items-center justify-center text-xs text-white font-medium"
-                        style={{ width: `${(data.despesas / 30000) * 100}%` }}
-                      >
-                        R$ {(data.despesas / 1000).toFixed(0)}k
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-4 mt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded"></div>
-                <span>Receita</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded"></div>
-                <span>Despesas</span>
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
+                <TrendingUp className="h-6 w-6 text-green-600" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Breakdown de Despesas */}
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle>Distribuição de Despesas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {expenses.map((expense) => (
-                <div key={expense.category} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{expense.category}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {expense.amount} ({expense.percentage}%)
-                    </span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-smooth"
-                      style={{ width: `${expense.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Taxa de Entrega</p>
+                <p className="text-2xl font-bold mt-2">
+                  {formatCurrency(report.summary.deliveryFee)}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                <DollarSign className="h-6 w-6 text-blue-600" />
+              </div>
             </div>
-            <div className="mt-6 p-4 bg-muted/30 rounded-lg">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold">Total de Despesas</span>
-                <span className="text-lg font-bold text-primary">R$ 61,000</span>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Comissão Plataforma</p>
+                <p className="text-2xl font-bold mt-2 text-orange-600">
+                  -{formatCurrency(report.summary.platformFee)}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950/30">
+                <TrendingDown className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Valor Líquido</p>
+                <p className="text-2xl font-bold mt-2 text-green-600">
+                  {formatCurrency(report.summary.netRevenue)}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
+                <FileText className="h-6 w-6 text-green-600" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Projeções */}
-      <Card className="shadow-card">
+      {/* Tabela de Pedidos */}
+      <Card>
         <CardHeader>
-          <CardTitle>Projeções para Próximo Mês</CardTitle>
+          <CardTitle>Pedidos Detalhados</CardTitle>
+          <CardDescription>
+            {report.totalCount} pedido(s) encontrado(s) no período
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-              <p className="text-2xl font-bold text-green-600">R$ 28,500</p>
-              <p className="text-sm text-muted-foreground">Receita Projetada</p>
-              <p className="text-xs text-green-600 mt-1">+9% crescimento estimado</p>
+          {report.orders.length > 0 ? (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead className="text-right">Valor Itens</TableHead>
+                    <TableHead className="text-right">Taxa Entrega</TableHead>
+                    <TableHead className="text-right">Comissão (12%)</TableHead>
+                    <TableHead className="text-right">Valor Líquido</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {report.orders.map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell>{order.date.toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell className="font-mono text-xs">{order.id.slice(0, 8)}...</TableCell>
+                      <TableCell>{order.customerName}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(order.itemsTotal)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(order.deliveryFee)}
+                      </TableCell>
+                      <TableCell className="text-right text-orange-600">
+                        -{formatCurrency(order.platformFee)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-green-600">
+                        {formatCurrency(order.netAmount)}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(order.status)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">R$ 13,200</p>
-              <p className="text-sm text-muted-foreground">Despesas Estimadas</p>
-              <p className="text-xs text-blue-600 mt-1">+6% vs. mês atual</p>
+          ) : (
+            <div className="text-center text-muted-foreground py-12">
+              Nenhum pedido encontrado no período selecionado
             </div>
-            <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-              <p className="text-2xl font-bold text-yellow-600">R$ 15,300</p>
-              <p className="text-sm text-muted-foreground">Lucro Estimado</p>
-              <p className="text-xs text-yellow-600 mt-1">53.7% margem projetada</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Informações Adicionais */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Informações do Relatório</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+            <div>
+              <p className="text-muted-foreground">Comissão da Plataforma</p>
+              <p className="font-medium mt-1">12% sobre o valor dos itens</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Taxa de Entrega</p>
+              <p className="font-medium mt-1">100% para a loja</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Período do Relatório</p>
+              <p className="font-medium mt-1">
+                {dateRange.startDate.toLocaleDateString('pt-BR')} até{' '}
+                {dateRange.endDate.toLocaleDateString('pt-BR')}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -200,4 +302,4 @@ const Financial = () => {
   );
 };
 
-export default Financial; 
+export default Financial;

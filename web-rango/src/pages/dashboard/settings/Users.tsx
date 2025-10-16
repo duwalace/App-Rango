@@ -7,6 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
+  getStoreTeamMembers,
+  inviteTeamMember,
+  updateMemberRole,
+  removeTeamMember,
+  getPendingInvites,
+  type TeamMember,
+} from '@/services/userManagementService';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -44,16 +52,6 @@ import {
   XCircle,
 } from 'lucide-react';
 
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: 'owner' | 'admin' | 'manager' | 'staff';
-  status: 'active' | 'pending' | 'suspended';
-  avatar?: string;
-  joinedAt: Date;
-}
-
 const roleLabels = {
   owner: 'Proprietário',
   admin: 'Administrador',
@@ -82,39 +80,45 @@ export default function Users() {
     role: 'staff' as TeamMember['role'],
   });
 
-  const [team, setTeam] = useState<TeamMember[]>([
-    {
-      id: '1',
-      name: 'João Silva',
-      email: 'joao@exemplo.com',
-      role: 'owner',
-      status: 'active',
-      joinedAt: new Date('2024-01-15'),
-    },
-    {
-      id: '2',
-      name: 'Maria Santos',
-      email: 'maria@exemplo.com',
-      role: 'admin',
-      status: 'active',
-      joinedAt: new Date('2024-02-20'),
-    },
-    {
-      id: '3',
-      name: 'Pedro Oliveira',
-      email: 'pedro@exemplo.com',
-      role: 'manager',
-      status: 'pending',
-      joinedAt: new Date('2024-03-10'),
-    },
-  ]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
 
   useEffect(() => {
-    loadTeam();
+    if (user?.storeId) {
+      loadTeam();
+    }
   }, [user?.storeId]);
 
   const loadTeam = async () => {
-    setLoading(false);
+    if (!user?.storeId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('📋 Carregando equipe da loja:', user.storeId);
+
+      const [members, invites] = await Promise.all([
+        getStoreTeamMembers(user.storeId),
+        getPendingInvites(user.storeId),
+      ]);
+
+      setTeam(members);
+      setPendingInvites(invites);
+      
+      console.log('✅ Equipe carregada:', members.length, 'membros');
+      console.log('✅ Convites pendentes:', invites.length);
+    } catch (error) {
+      console.error('❌ Erro ao carregar equipe:', error);
+      toast({
+        title: 'Erro ao carregar equipe',
+        description: 'Não foi possível carregar os membros da equipe',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInvite = async () => {
@@ -127,31 +131,44 @@ export default function Users() {
       return;
     }
 
-    try {
-      const newMember: TeamMember = {
-        id: Date.now().toString(),
-        name: inviteData.name,
-        email: inviteData.email,
-        role: inviteData.role,
-        status: 'pending',
-        joinedAt: new Date(),
-      };
+    if (!user?.storeId) {
+      toast({
+        title: 'Erro',
+        description: 'Loja não identificada',
+        variant: 'destructive',
+      });
+      return;
+    }
 
-      setTeam([...team, newMember]);
+    try {
+      setLoading(true);
+      
+      await inviteTeamMember({
+        email: inviteData.email,
+        name: inviteData.name,
+        role: inviteData.role,
+        storeId: user.storeId,
+      });
 
       toast({
         title: '✅ Convite enviado!',
-        description: `Um email foi enviado para ${inviteData.email}`,
+        description: `Um convite foi criado para ${inviteData.email}`,
       });
 
       setShowInviteModal(false);
       setInviteData({ email: '', name: '', role: 'staff' });
-    } catch (error) {
+      
+      // Recarregar a lista
+      await loadTeam();
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar convite:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível enviar o convite',
+        description: error.message || 'Não foi possível enviar o convite',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -159,7 +176,9 @@ export default function Users() {
     if (!deleteTarget) return;
 
     try {
-      setTeam(team.filter((member) => member.id !== deleteTarget.id));
+      setLoading(true);
+      
+      await removeTeamMember(deleteTarget.id);
 
       toast({
         title: '✅ Usuário removido',
@@ -167,32 +186,43 @@ export default function Users() {
       });
 
       setDeleteTarget(null);
-    } catch (error) {
+      
+      // Recarregar a lista
+      await loadTeam();
+    } catch (error: any) {
+      console.error('❌ Erro ao remover usuário:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível remover o usuário',
+        description: error.message || 'Não foi possível remover o usuário',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleUpdateRole = async (memberId: string, newRole: TeamMember['role']) => {
     try {
-      setTeam(
-        team.map((member) =>
-          member.id === memberId ? { ...member, role: newRole } : member
-        )
-      );
+      setLoading(true);
+      
+      await updateMemberRole(memberId, newRole);
 
       toast({
         title: '✅ Permissão atualizada',
+        description: 'As permissões foram atualizadas com sucesso',
       });
-    } catch (error) {
+      
+      // Recarregar a lista
+      await loadTeam();
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar permissões:', error);
       toast({
         title: 'Erro',
-        description: 'Não foi possível atualizar as permissões',
+        description: error.message || 'Não foi possível atualizar as permissões',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
 

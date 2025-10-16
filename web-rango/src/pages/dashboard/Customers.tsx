@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,45 +63,27 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-// ========================================
-// TIPOS E INTERFACES
-// ========================================
-
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  createdAt: Date;
-  lastOrderAt: Date | null;
-  totalOrders: number;
-  totalSpent: number;
-  averageTicket: number;
-  segment: 'vip' | 'regular' | 'new' | 'inactive';
-  status: 'active' | 'inactive';
-  tags: string[];
-  notes: string;
-  favoriteItems: string[];
-  rating: number;
-}
-
-interface Order {
-  id: string;
-  date: Date;
-  total: number;
-  items: number;
-  status: string;
-}
+import {
+  getStoreCustomers,
+  calculateCustomerStats,
+  getCustomerOrders,
+  updateCustomerNotes as saveCustomerNotes,
+  getCustomerNotes,
+  exportCustomersToCSV,
+  type Customer,
+  type CustomerOrder,
+} from '@/services/customersService';
 
 // ========================================
 // COMPONENTE PRINCIPAL
 // ========================================
 
 export default function Customers() {
+  const { user } = useAuth();
   const { toast } = useToast();
 
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [segmentFilter, setSegmentFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -109,9 +92,37 @@ export default function Customers() {
   const [customerNotes, setCustomerNotes] = useState('');
   const [customerTags, setCustomerTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState('');
+  const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
 
-  // Mock Data
-  const [customers] = useState<Customer[]>([
+  // Carregar clientes ao montar o componente
+  useEffect(() => {
+    if (user?.storeId) {
+      loadCustomers();
+    }
+  }, [user]);
+
+  const loadCustomers = async () => {
+    if (!user?.storeId) return;
+
+    try {
+      setLoading(true);
+      const data = await getStoreCustomers(user.storeId);
+      setCustomers(data);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+      toast({
+        title: '❌ Erro',
+        description: 'Não foi possível carregar os clientes',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Mock Data (removido - agora usa dados reais)
+  const [mockCustomers] = useState<Customer[]>([
     {
       id: '1',
       name: 'Ana Silva Santos',
@@ -224,22 +235,7 @@ export default function Customers() {
 
   // Stats
   const stats = useMemo(() => {
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
-    const totalCustomers = customers.length;
-    const newThisMonth = customers.filter(c => c.createdAt >= thirtyDaysAgo).length;
-    const activeCustomers = customers.filter(c => c.status === 'active').length;
-    const totalRevenue = customers.reduce((sum, c) => sum + c.totalSpent, 0);
-    const averageTicket = totalRevenue / customers.reduce((sum, c) => sum + c.totalOrders, 0);
-
-    return {
-      totalCustomers,
-      newThisMonth,
-      activeCustomers,
-      averageTicket,
-      totalRevenue,
-    };
+    return calculateCustomerStats(customers);
   }, [customers]);
 
   // Filtered Customers
@@ -286,11 +282,32 @@ export default function Customers() {
     );
   };
 
-  const handleOpenDetails = (customer: Customer) => {
+  const handleOpenDetails = async (customer: Customer) => {
     setSelectedCustomer(customer);
-    setCustomerNotes(customer.notes);
-    setCustomerTags(customer.tags);
     setShowDetailsModal(true);
+    
+    // Carregar notas salvas do Firebase
+    const savedNotes = await getCustomerNotes(customer.id);
+    if (savedNotes) {
+      setCustomerNotes(savedNotes.notes);
+      setCustomerTags(savedNotes.tags);
+    } else {
+      setCustomerNotes(customer.notes);
+      setCustomerTags(customer.tags);
+    }
+
+    // Carregar histórico de pedidos
+    if (user?.storeId) {
+      setLoadingOrders(true);
+      try {
+        const orders = await getCustomerOrders(user.storeId, customer.id);
+        setCustomerOrders(orders);
+      } catch (error) {
+        console.error('Erro ao carregar pedidos:', error);
+      } finally {
+        setLoadingOrders(false);
+      }
+    }
   };
 
   const handleAddTag = () => {
@@ -306,25 +323,40 @@ export default function Customers() {
     toast({ title: '✅ Tag removida!' });
   };
 
-  const handleSaveNotes = () => {
-    toast({ title: '✅ Notas salvas com sucesso!' });
-    setShowDetailsModal(false);
+  const handleSaveNotes = async () => {
+    if (!selectedCustomer) return;
+
+    try {
+      await saveCustomerNotes(selectedCustomer.id, customerNotes, customerTags);
+      toast({ title: '✅ Notas salvas com sucesso!' });
+      setShowDetailsModal(false);
+    } catch (error) {
+      toast({
+        title: '❌ Erro',
+        description: 'Não foi possível salvar as notas',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleExport = () => {
+    exportCustomersToCSV(filteredCustomers);
     toast({ 
-      title: '📊 Exportando dados...', 
-      description: 'O arquivo CSV será baixado em instantes' 
+      title: '✅ Exportação concluída', 
+      description: 'O arquivo CSV foi baixado com sucesso' 
     });
   };
 
-  // Mock orders for selected customer
-  const mockOrders: Order[] = [
-    { id: '1', date: new Date('2024-02-01'), total: 65.90, items: 3, status: 'Entregue' },
-    { id: '2', date: new Date('2024-01-28'), total: 48.50, items: 2, status: 'Entregue' },
-    { id: '3', date: new Date('2024-01-25'), total: 82.00, items: 4, status: 'Entregue' },
-    { id: '4', date: new Date('2024-01-20'), total: 55.00, items: 2, status: 'Entregue' },
-  ];
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Carregando base de clientes...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -724,40 +756,52 @@ export default function Customers() {
 
             {/* Tab: Orders */}
             <TabsContent value="orders" className="space-y-3">
-              {mockOrders.map((order) => (
-                <Card key={order.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
-                          <ShoppingBag className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="font-semibold">Pedido #{order.id}</p>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {order.date.toLocaleDateString('pt-BR')}
-                            </span>
-                            <span>{order.items} itens</span>
+              {loadingOrders ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
+                </div>
+              ) : customerOrders.length === 0 ? (
+                <div className="text-center py-8">
+                  <ShoppingBag className="h-12 w-12 mx-auto text-gray-400 mb-2" />
+                  <p className="text-muted-foreground">Nenhum pedido encontrado</p>
+                </div>
+              ) : (
+                customerOrders.map((order) => (
+                  <Card key={order.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
+                            <ShoppingBag className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold">Pedido #{order.id.slice(-6).toUpperCase()}</p>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {order.date.toLocaleDateString('pt-BR')}
+                              </span>
+                              <span>{order.items} itens</span>
+                            </div>
                           </div>
                         </div>
+                        <div className="text-right">
+                          <p className="font-bold text-lg text-green-600">
+                            {order.total.toLocaleString('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                            })}
+                          </p>
+                          <Badge variant="outline" className="mt-1">
+                            {order.status}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-lg text-green-600">
-                          {order.total.toLocaleString('pt-BR', {
-                            style: 'currency',
-                            currency: 'BRL',
-                          })}
-                        </p>
-                        <Badge variant="outline" className="mt-1">
-                          {order.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </TabsContent>
 
             {/* Tab: Notes & Tags */}

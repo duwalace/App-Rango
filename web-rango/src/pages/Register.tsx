@@ -4,6 +4,8 @@ import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { createStore } from '@/services/storeService';
+import { fetchAddressByCEP, formatCEP, isValidCEP } from '@/services/cepService';
+import { geocodeAddress, areValidCoordinates } from '@/services/geocodingService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +25,9 @@ import {
   AlertCircle,
   Utensils,
   Home,
-  FileText
+  FileText,
+  Loader2,
+  Navigation
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -37,6 +41,11 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Estados para CEP e Geolocalização
+  const [loadingCEP, setLoadingCEP] = useState(false);
+  const [loadingGeocode, setLoadingGeocode] = useState(false);
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
   // Dados da conta
   const [accountData, setAccountData] = useState({
@@ -115,6 +124,41 @@ export default function Register() {
 
   const progress = ((currentStep + 1) / steps.length) * 100;
 
+  // Funções de formatação
+  const formatPhone = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+    
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11);
+    
+    // Aplica a máscara
+    if (limited.length <= 2) {
+      return limited;
+    } else if (limited.length <= 6) {
+      return `(${limited.slice(0, 2)}) ${limited.slice(2)}`;
+    } else if (limited.length <= 10) {
+      return `(${limited.slice(0, 2)}) ${limited.slice(2, 6)}-${limited.slice(6)}`;
+    } else {
+      return `(${limited.slice(0, 2)}) ${limited.slice(2, 7)}-${limited.slice(7, 11)}`;
+    }
+  };
+
+  const formatCEPInput = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+    
+    // Limita a 8 dígitos
+    const limited = numbers.slice(0, 8);
+    
+    // Aplica a máscara (12345-678)
+    if (limited.length <= 5) {
+      return limited;
+    } else {
+      return `${limited.slice(0, 5)}-${limited.slice(5, 8)}`;
+    }
+  };
+
   // Validações em tempo real
   const validateEmail = (email: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -122,8 +166,10 @@ export default function Register() {
   };
 
   const validatePhone = (phone: string) => {
-    const re = /^\(\d{2}\)\s?\d{4,5}-?\d{4}$/;
-    return re.test(phone) || phone.length >= 10;
+    // Remove caracteres não numéricos para validar
+    const numbers = phone.replace(/\D/g, '');
+    // Telefone deve ter 10 ou 11 dígitos (com DDD)
+    return numbers.length === 10 || numbers.length === 11;
   };
 
   const validatePassword = (password: string) => {
@@ -131,16 +177,27 @@ export default function Register() {
   };
 
   const handleFieldChange = (field: string, value: string, section: string) => {
+    // Aplicar formatação automática para campos específicos
+    let formattedValue = value;
+    
+    if (field === 'phone') {
+      formattedValue = formatPhone(value);
+    }
+    
+    if (field === 'zipCode') {
+      formattedValue = formatCEPInput(value);
+    }
+
     // Atualizar estado
     switch (section) {
       case 'account':
-        setAccountData({ ...accountData, [field]: value });
+        setAccountData({ ...accountData, [field]: formattedValue });
         break;
       case 'store':
-        setStoreData({ ...storeData, [field]: value });
+        setStoreData({ ...storeData, [field]: formattedValue });
         break;
       case 'address':
-        setAddressData({ ...addressData, [field]: value });
+        setAddressData({ ...addressData, [field]: formattedValue });
         break;
     }
 
@@ -151,8 +208,8 @@ export default function Register() {
     if (field === 'email' && value && !validateEmail(value)) {
       newErrors[field] = 'Email inválido';
     }
-    if (field === 'phone' && value && !validatePhone(value)) {
-      newErrors[field] = 'Telefone inválido';
+    if (field === 'phone' && value && !validatePhone(formattedValue)) {
+      newErrors[field] = 'Telefone deve ter 10 ou 11 dígitos';
     }
     if (field === 'password' && value && !validatePassword(value)) {
       newErrors[field] = 'Mínimo 6 caracteres';
@@ -195,8 +252,103 @@ export default function Register() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Função para buscar endereço por CEP
+  const handleCEPBlur = async () => {
+    const cep = addressData.zipCode.replace(/\D/g, '');
+    
+    if (!cep || cep.length !== 8) {
+      return;
+    }
+
+    setLoadingCEP(true);
+
+    try {
+      const address = await fetchAddressByCEP(cep);
+      
+      if (address) {
+        setAddressData({
+          ...addressData,
+          street: address.street || addressData.street,
+          neighborhood: address.neighborhood || addressData.neighborhood,
+          city: address.city || addressData.city,
+          state: address.state || addressData.state,
+          zipCode: address.zipCode
+        });
+
+        toast({
+          title: '✅ CEP encontrado!',
+          description: 'Endereço preenchido automaticamente'
+        });
+
+        // Auto-geocodificar após buscar CEP
+        setTimeout(() => handleGeocode(), 500);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'CEP não encontrado',
+        description: error.message || 'Verifique o CEP digitado',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingCEP(false);
+    }
+  };
+
+  // Função para buscar coordenadas do endereço
+  const handleGeocode = async () => {
+    if (!addressData.street || !addressData.city || !addressData.state) {
+      toast({
+        title: 'Endereço incompleto',
+        description: 'Preencha rua, cidade e estado primeiro',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setLoadingGeocode(true);
+
+    try {
+      const result = await geocodeAddress(
+        addressData.street,
+        addressData.number,
+        addressData.neighborhood,
+        addressData.city,
+        addressData.state,
+        addressData.zipCode
+      );
+
+      if (result && areValidCoordinates(result.coordinates.lat, result.coordinates.lng)) {
+        setCoordinates(result.coordinates);
+        
+        toast({
+          title: '📍 Localização encontrada!',
+          description: `Lat: ${result.coordinates.lat.toFixed(6)}, Lng: ${result.coordinates.lng.toFixed(6)}`
+        });
+      } else {
+        toast({
+          title: 'Localização não encontrada',
+          description: 'Não foi possível obter as coordenadas deste endereço',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Erro ao buscar localização',
+        description: 'Tente novamente mais tarde',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingGeocode(false);
+    }
+  };
+
   const handleNext = () => {
     if (validateStep(currentStep)) {
+      // Se estiver no passo de endereço e não tiver coordenadas, tentar geocodificar
+      if (currentStep === 2 && !coordinates) {
+        handleGeocode();
+      }
+      
       setCurrentStep(currentStep + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
@@ -224,30 +376,76 @@ export default function Register() {
     }
 
     setLoading(true);
+    let userCreated = false;
+    let userId = '';
 
     try {
       console.log('🔵 Iniciando cadastro...');
+      console.log('📧 Email:', accountData.email);
       
       // Passo 1: Criar usuário no Firebase Auth
-      console.log('🔵 Criando usuário no Firebase Auth...');
+      console.log('🔵 Passo 1/4: Criando usuário no Firebase Auth...');
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         accountData.email,
         accountData.password
       );
       const user = userCredential.user;
-      console.log('✅ Usuário criado:', user.uid);
+      userId = user.uid;
+      userCreated = true;
+      console.log('✅ Usuário criado no Auth:', user.uid);
 
       // Passo 2: Atualizar perfil
-      console.log('🔵 Atualizando perfil...');
+      console.log('🔵 Passo 2/4: Atualizando perfil...');
       await updateProfile(user, {
         displayName: accountData.name
       });
       console.log('✅ Perfil atualizado');
 
-      // Passo 3: Criar loja no Firestore
-      console.log('🔵 Criando loja no Firestore...');
-      const storeId = await createStore({
+      // Passo 3: Criar documento do usuário PRIMEIRO (importante para as regras do Firestore)
+      console.log('🔵 Passo 3/4: Criando documento do usuário no Firestore...');
+      console.log('📄 Collection: users, Document:', user.uid);
+      
+      // Criar com storeId temporário
+      await setDoc(doc(db, 'users', user.uid), {
+        email: accountData.email,
+        nome: accountData.name,
+        role: 'dono_da_loja',
+        storeId: 'pending', // Será atualizado após criar a loja
+        storeName: storeData.storeName,
+        phone: accountData.phone,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      console.log('✅ Documento do usuário criado');
+
+      // Passo 4: Criar loja no Firestore
+      console.log('🔵 Passo 4/4: Criando loja no Firestore...');
+      console.log('📄 Collection: stores');
+      
+      // Se não tiver coordenadas, tentar obter antes de criar a loja
+      let finalCoordinates = coordinates;
+      if (!finalCoordinates) {
+        console.log('⚠️ Coordenadas não encontradas, tentando geocodificar...');
+        try {
+          const geocodeResult = await geocodeAddress(
+            addressData.street,
+            addressData.number,
+            addressData.neighborhood,
+            addressData.city,
+            addressData.state,
+            addressData.zipCode
+          );
+          if (geocodeResult) {
+            finalCoordinates = geocodeResult.coordinates;
+            console.log('✅ Coordenadas obtidas:', finalCoordinates);
+          }
+        } catch (error) {
+          console.warn('⚠️ Não foi possível obter coordenadas, continuando sem geolocalização');
+        }
+      }
+      
+      const storeData_: any = {
         name: storeData.storeName,
         description: storeData.description,
         logo: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200&h=200&fit=crop',
@@ -273,12 +471,27 @@ export default function Register() {
         },
         operatingHours: operatingHours,
         category: storeData.category,
-        isActive: true
-      });
+        isActive: true,
+        ownerId: user.uid
+      };
+
+      // Adicionar geolocalização se disponível
+      if (finalCoordinates) {
+        storeData_.location = {
+          latitude: finalCoordinates.lat,
+          longitude: finalCoordinates.lng,
+          formattedAddress: `${addressData.street}, ${addressData.number} - ${addressData.city}, ${addressData.state}`
+        };
+        console.log('📍 Loja será criada com geolocalização:', storeData_.location);
+      } else {
+        console.warn('⚠️ Loja será criada SEM geolocalização');
+      }
+      
+      const storeId = await createStore(storeData_);
       console.log('✅ Loja criada com ID:', storeId);
 
-      // Passo 4: Criar documento do usuário
-      console.log('🔵 Criando documento do usuário...');
+      // Passo 5: Atualizar documento do usuário com storeId real
+      console.log('🔵 Atualizando documento do usuário com storeId...');
       await setDoc(doc(db, 'users', user.uid), {
         email: accountData.email,
         nome: accountData.name,
@@ -289,7 +502,7 @@ export default function Register() {
         createdAt: new Date(),
         updatedAt: new Date()
       });
-      console.log('✅ Documento do usuário criado');
+      console.log('✅ Documento do usuário atualizado com storeId:', storeId);
 
       console.log('🎉 Cadastro completo!');
       toast({
@@ -302,25 +515,47 @@ export default function Register() {
       }, 2000);
 
     } catch (error: any) {
-      console.error('❌ Erro completo ao cadastrar:', error);
+      console.error('❌ ERRO COMPLETO:', error);
+      console.error('❌ Código do erro:', error.code);
+      console.error('❌ Mensagem:', error.message);
+      console.error('❌ Stack:', error.stack);
       
       let errorMessage = 'Erro ao criar cadastro';
+      let errorDescription = '';
+      
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = 'Este email já está em uso';
+        errorDescription = 'Tente fazer login ou use outro email';
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'Email inválido';
+        errorDescription = 'Verifique o formato do email';
       } else if (error.code === 'auth/weak-password') {
         errorMessage = 'Senha muito fraca';
+        errorDescription = 'Use pelo menos 6 caracteres';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = 'Permissão negada';
+        errorDescription = 'Erro nas regras de segurança do Firestore';
+      } else if (error.message?.includes('BLOCKED_BY_CLIENT')) {
+        errorMessage = 'Conexão bloqueada';
+        errorDescription = 'Desative extensões de bloqueio (Ad Blocker) e tente novamente';
       } else if (error.code) {
-        errorMessage = `Erro: ${error.code} - ${error.message}`;
+        errorMessage = `Erro: ${error.code}`;
+        errorDescription = error.message;
       } else {
         errorMessage = error.message || 'Erro desconhecido';
+        errorDescription = 'Verifique sua conexão e tente novamente';
+      }
+
+      // Se criou o usuário mas falhou depois, avisar
+      if (userCreated) {
+        errorDescription += '. Usuário criado, mas houve erro ao salvar dados. Entre em contato com o suporte.';
       }
 
       toast({
-        title: 'Erro no cadastro',
-        description: errorMessage,
-        variant: 'destructive'
+        title: errorMessage,
+        description: errorDescription,
+        variant: 'destructive',
+        duration: 10000
       });
     } finally {
       setLoading(false);
@@ -457,13 +692,16 @@ export default function Register() {
                         value={accountData.phone}
                         onChange={(e) => handleFieldChange('phone', e.target.value, 'account')}
                         className={`pl-9 h-10 ${errors.phone ? 'border-red-500' : ''}`}
+                        maxLength={15}
                       />
                     </div>
-                    {errors.phone && (
+                    {errors.phone ? (
                       <p className="text-xs text-red-600 mt-0.5 flex items-center gap-1">
                         <AlertCircle className="h-3 w-3" />
                         {errors.phone}
                       </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">Formato: (11) 99999-9999 - Máx. 11 dígitos</p>
                     )}
                   </div>
 
@@ -599,10 +837,12 @@ export default function Register() {
                           id="storePhone"
                           placeholder="(11) 3333-3333"
                           value={storeData.phone}
-                          onChange={(e) => setStoreData({ ...storeData, phone: e.target.value })}
+                          onChange={(e) => handleFieldChange('phone', e.target.value, 'store')}
                           className="pl-9 h-10"
+                          maxLength={15}
                         />
                       </div>
+                      <p className="text-xs text-gray-500 mt-1">Máx. 11 dígitos</p>
                     </div>
 
                     <div>
@@ -631,18 +871,23 @@ export default function Register() {
                           value={deliveryData.deliveryTime}
                           onChange={(e) => setDeliveryData({ ...deliveryData, deliveryTime: e.target.value })}
                           className="mt-1 h-10"
+                          maxLength={20}
                         />
+                        <p className="text-xs text-orange-600 mt-1">Ex: 30-45 min</p>
                       </div>
                       <div>
                         <Label className="text-sm text-orange-800">Taxa de Entrega (R$)</Label>
                         <Input
                           type="number"
                           step="0.01"
+                          min="0"
+                          max="999.99"
                           placeholder="5.99"
                           value={deliveryData.deliveryFee}
                           onChange={(e) => setDeliveryData({ ...deliveryData, deliveryFee: e.target.value })}
                           className="mt-1 h-10"
                         />
+                        <p className="text-xs text-orange-600 mt-1">Valor da taxa</p>
                       </div>
                     </div>
                   </div>
@@ -688,6 +933,7 @@ export default function Register() {
                         value={addressData.number}
                         onChange={(e) => handleFieldChange('number', e.target.value, 'address')}
                         className={`h-10 mt-1 ${errors.number ? 'border-red-500' : ''}`}
+                        maxLength={10}
                       />
                       {errors.number && (
                         <p className="text-xs text-red-600 mt-0.5 flex items-center gap-1">
@@ -700,23 +946,33 @@ export default function Register() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
+                      <Label htmlFor="zipCode" className="text-sm">CEP</Label>
+                      <div className="flex gap-2 mt-1">
+                        <div className="relative flex-1">
+                          <Input
+                            id="zipCode"
+                            placeholder="01310-100"
+                            value={addressData.zipCode}
+                            onChange={(e) => handleFieldChange('zipCode', e.target.value, 'address')}
+                            onBlur={handleCEPBlur}
+                            maxLength={9}
+                            className="h-10"
+                          />
+                          {loadingCEP && (
+                            <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-gray-400" />
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Digite o CEP e pressione Tab - Máx. 8 dígitos</p>
+                    </div>
+
+                    <div>
                       <Label htmlFor="neighborhood" className="text-sm">Bairro</Label>
                       <Input
                         id="neighborhood"
                         placeholder="Bela Vista"
                         value={addressData.neighborhood}
                         onChange={(e) => handleFieldChange('neighborhood', e.target.value, 'address')}
-                        className="h-10 mt-1"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="zipCode" className="text-sm">CEP</Label>
-                      <Input
-                        id="zipCode"
-                        placeholder="01310-100"
-                        value={addressData.zipCode}
-                        onChange={(e) => handleFieldChange('zipCode', e.target.value, 'address')}
                         className="h-10 mt-1"
                       />
                     </div>
@@ -756,6 +1012,56 @@ export default function Register() {
                           {errors.state}
                         </p>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Card de Geolocalização */}
+                  <div className={`p-4 rounded-lg border ${coordinates ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <MapPin className={`h-5 w-5 ${coordinates ? 'text-green-600' : 'text-blue-600'}`} />
+                          <h3 className={`font-semibold text-sm ${coordinates ? 'text-green-900' : 'text-blue-900'}`}>
+                            {coordinates ? 'Localização Confirmada' : 'Geolocalização'}
+                          </h3>
+                        </div>
+                        <p className={`text-xs ${coordinates ? 'text-green-700' : 'text-blue-700'}`}>
+                          {coordinates 
+                            ? `Coordenadas: ${coordinates.lat.toFixed(6)}, ${coordinates.lng.toFixed(6)}` 
+                            : 'Busque as coordenadas da sua loja para permitir que entregadores encontrem pedidos próximos'
+                          }
+                        </p>
+                        {coordinates && (
+                          <p className="text-xs text-green-600 mt-1">
+                            ✓ Sua loja poderá ser encontrada por entregadores
+                          </p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleGeocode}
+                        disabled={loadingGeocode || !addressData.street || !addressData.city}
+                        variant="outline"
+                        size="sm"
+                        className={coordinates ? 'border-green-300 text-green-700 hover:bg-green-100' : 'border-blue-300 text-blue-700 hover:bg-blue-100'}
+                      >
+                        {loadingGeocode ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            Buscando...
+                          </>
+                        ) : coordinates ? (
+                          <>
+                            <Navigation className="h-4 w-4 mr-1" />
+                            Atualizar
+                          </>
+                        ) : (
+                          <>
+                            <Navigation className="h-4 w-4 mr-1" />
+                            Buscar
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </div>

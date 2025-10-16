@@ -61,10 +61,12 @@ export default function Reviews() {
 
     try {
       setLoading(true);
+      
+      // SOLUÇÃO TEMPORÁRIA: Removendo orderBy para evitar erro de índice
       const q = query(
         collection(db, 'reviews'),
-        where('storeId', '==', user.storeId),
-        orderBy('createdAt', 'desc')
+        where('storeId', '==', user.storeId)
+        // orderBy('createdAt', 'desc') // Descomentar após deploy do índice
       );
 
       const snapshot = await getDocs(q);
@@ -74,8 +76,15 @@ export default function Reviews() {
         reviewsData.push({ id: doc.id, ...doc.data() } as Review);
       });
 
-      setReviews(reviewsData);
-      calculateStats(reviewsData);
+      // Ordenar no JavaScript (solução temporária)
+      const sortedReviews = reviewsData.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      setReviews(sortedReviews);
+      calculateStats(sortedReviews);
     } catch (error) {
       console.error('Erro ao carregar avaliações:', error);
     } finally {

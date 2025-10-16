@@ -84,32 +84,32 @@ const getMenuSections = (pendingOrdersCount: number): MenuSection[] => [
       { title: "Categorias do Cardápio", icon: Grid3X3, url: "/dashboard/menu/categories", badge: null },
       { title: "Complementos e Variações", icon: Plus, url: "/dashboard/menu/complements", badge: null },
       { title: "Disponibilidade de Itens", icon: Eye, url: "/dashboard/menu/availability", badge: null },
-      { title: "Controle de Estoque", icon: Archive, url: "/dashboard/menu/inventory", badge: "Novo", isNew: true },
+      { title: "Controle de Estoque", icon: Archive, url: "/dashboard/menu/inventory", badge: null },
     ]
   },
   {
     title: "MARKETING",
     items: [
       { title: "Promoções", icon: Tag, url: "/dashboard/promotions", badge: null },
-      { title: "Cupons de Desconto", icon: Ticket, url: "/dashboard/marketing/coupons", badge: "Novo", isNew: true },
-      { title: "Programa de Fidelidade", icon: Gift, url: "/dashboard/marketing/loyalty", badge: "Novo", isNew: true },
-      { title: "Notificações", icon: Bell, url: "/dashboard/marketing/notifications", badge: "Novo", isNew: true },
+      { title: "Cupons de Desconto", icon: Ticket, url: "/dashboard/marketing/coupons", badge: null },
+      { title: "Programa de Fidelidade", icon: Gift, url: "/dashboard/marketing/loyalty", badge: null },
+      { title: "Notificações", icon: Bell, url: "/dashboard/marketing/notifications", badge: null },
     ]
   },
   {
     title: "CLIENTES",
     items: [
       { title: "Avaliações", icon: Star, url: "/dashboard/reviews", badge: null },
-      { title: "Base de Clientes (CRM)", icon: UserCheck, url: "/dashboard/customers/crm", badge: "Novo", isNew: true },
+      { title: "Base de Clientes (CRM)", icon: UserCheck, url: "/dashboard/customers/crm", badge: null },
     ]
   },
   {
     title: "CONFIGURAÇÕES",
     items: [
       { title: "Configurações da Loja", icon: Settings, url: "/dashboard/settings/store", badge: null },
-      { title: "Área de Entrega", icon: MapPin, url: "/dashboard/settings/delivery-area", badge: "Novo", isNew: true },
+      { title: "Área de Entrega", icon: MapPin, url: "/dashboard/settings/delivery-area", badge: null },
       { title: "Dados Bancários", icon: CreditCard, url: "/dashboard/settings/banking", badge: null },
-      { title: "Gestão de Usuários", icon: UserPlus, url: "/dashboard/settings/users", badge: "Novo", isNew: true },
+      { title: "Gestão de Usuários", icon: UserPlus, url: "/dashboard/settings/users", badge: null },
     ]
   }
 ];

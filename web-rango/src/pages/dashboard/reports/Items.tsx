@@ -1,383 +1,355 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Package,
-  Star,
-  AlertTriangle,
-  Award,
-} from 'lucide-react';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Package, TrendingUp, Loader2, Download, ArrowUpDown } from 'lucide-react';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import {
+  getProductAnalytics,
+  getPresetDateRanges,
+  exportToCSV,
+  type DateRange,
+  type ProductAnalytics,
+} from '@/services/analyticsService';
 
-interface ItemAnalytics {
-  id: string;
-  name: string;
-  category: string;
-  sales: number;
-  revenue: number;
-  averageRating: number;
-  reviewCount: number;
-  trend: 'up' | 'down' | 'stable';
-  trendPercentage: number;
-}
+type SortField = 'productName' | 'quantitySold' | 'revenue' | 'ordersCount';
+type SortDirection = 'asc' | 'desc';
 
-export default function ItemsReport() {
+const Items = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
+
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('30');
-
-  const [items] = useState<ItemAnalytics[]>([
-    {
-      id: '1',
-      name: 'X-Burger Especial',
-      category: 'Hambúrgueres',
-      sales: 145,
-      revenue: 5075.0,
-      averageRating: 4.8,
-      reviewCount: 89,
-      trend: 'up',
-      trendPercentage: 23,
-    },
-    {
-      id: '2',
-      name: 'Pizza Margherita',
-      category: 'Pizzas',
-      sales: 98,
-      revenue: 3920.0,
-      averageRating: 4.6,
-      reviewCount: 62,
-      trend: 'up',
-      trendPercentage: 15,
-    },
-    {
-      id: '3',
-      name: 'Batata Frita Grande',
-      category: 'Acompanhamentos',
-      sales: 203,
-      revenue: 2436.0,
-      averageRating: 4.4,
-      reviewCount: 128,
-      trend: 'stable',
-      trendPercentage: 2,
-    },
-    {
-      id: '4',
-      name: 'Coca-Cola 2L',
-      category: 'Bebidas',
-      sales: 187,
-      revenue: 1683.0,
-      averageRating: 4.9,
-      reviewCount: 95,
-      trend: 'up',
-      trendPercentage: 8,
-    },
-    {
-      id: '5',
-      name: 'Salada Caesar',
-      category: 'Saladas',
-      sales: 34,
-      revenue: 816.0,
-      averageRating: 4.2,
-      reviewCount: 21,
-      trend: 'down',
-      trendPercentage: -12,
-    },
-  ]);
-
-  const stats = useMemo(() => {
-    const totalSales = items.reduce((sum, item) => sum + item.sales, 0);
-    const totalRevenue = items.reduce((sum, item) => sum + item.revenue, 0);
-    const avgRating =
-      items.reduce((sum, item) => sum + item.averageRating, 0) / items.length;
-
-    return { totalSales, totalRevenue, avgRating };
-  }, [items]);
-
-  const topSellers = useMemo(() => {
-    return [...items].sort((a, b) => b.sales - a.sales).slice(0, 5);
-  }, [items]);
-
-  const topRevenue = useMemo(() => {
-    return [...items].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
-  }, [items]);
-
-  const lowPerformers = useMemo(() => {
-    return [...items].sort((a, b) => a.sales - b.sales).slice(0, 3);
-  }, [items]);
+  const [dateRange, setDateRange] = useState<DateRange>(getPresetDateRanges().thisMonth);
+  const [analytics, setAnalytics] = useState<ProductAnalytics | null>(null);
+  const [sortField, setSortField] = useState<SortField>('revenue');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
-    setLoading(false);
-  }, []);
+    if (user?.storeId) {
+      loadProductAnalytics();
+    }
+  }, [user?.storeId, dateRange]);
+
+  const loadProductAnalytics = async () => {
+    if (!user?.storeId) return;
+
+    try {
+      setLoading(true);
+      console.log('📦 Carregando análise de produtos...');
+
+      const data = await getProductAnalytics(user.storeId, dateRange);
+      setAnalytics(data);
+
+      console.log('✅ Análise de produtos carregada');
+    } catch (error) {
+      console.error('❌ Erro ao carregar análise:', error);
+      toast({
+        title: 'Erro ao carregar dados',
+        description: 'Não foi possível carregar a análise de produtos',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    if (!analytics || analytics.products.length === 0) {
+      toast({
+        title: 'Nenhum dado para exportar',
+        description: 'Não há produtos vendidos no período',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const dataToExport = analytics.products.map((product) => ({
+      Produto: product.productName,
+      Categoria: product.category,
+      'Quantidade Vendida': product.quantitySold,
+      Faturamento: product.revenue.toFixed(2),
+      'Pedidos': product.ordersCount,
+    }));
+
+    exportToCSV(dataToExport, `analise-produtos-${new Date().toISOString().split('T')[0]}`);
+
+    toast({
+      title: '✅ Exportado com sucesso!',
+      description: `${analytics.products.length} produtos exportados para CSV`,
+    });
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const getSortedProducts = () => {
+    if (!analytics) return [];
+
+    const sorted = [...analytics.products].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'productName':
+          comparison = a.productName.localeCompare(b.productName);
+          break;
+        case 'quantitySold':
+          comparison = a.quantitySold - b.quantitySold;
+          break;
+        case 'revenue':
+          comparison = a.revenue - b.revenue;
+          break;
+        case 'ordersCount':
+          comparison = a.ordersCount - b.ordersCount;
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  };
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
 
+  if (!analytics) {
+    return (
+      <div className="text-center text-muted-foreground py-12">
+        Nenhum dado disponível para o período selecionado
+      </div>
+    );
+  }
+
+  const sortedProducts = getSortedProducts();
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Análise de Itens</h1>
           <p className="text-muted-foreground mt-1">
-            Performance de vendas e popularidade dos produtos
+            Entenda quais produtos têm melhor desempenho
           </p>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Últimos 7 dias</SelectItem>
-            <SelectItem value="30">Últimos 30 dias</SelectItem>
-            <SelectItem value="90">Últimos 90 dias</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <Button onClick={handleExport} variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+        </div>
       </div>
 
-      {/* Stats */}
+      {/* Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total de Vendas</p>
-                <p className="text-2xl font-bold mt-1">{stats.totalSales}</p>
+                <p className="text-sm text-muted-foreground">Total de Produtos</p>
+                <p className="text-2xl font-bold mt-2">{analytics.products.length}</p>
               </div>
-              <Package className="h-8 w-8 text-blue-600" />
+              <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950/30">
+                <Package className="h-6 w-6 text-purple-600" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Receita Total</p>
-                <p className="text-2xl font-bold mt-1">
-                  {stats.totalRevenue.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  })}
+                <p className="text-sm text-muted-foreground">Itens Vendidos</p>
+                <p className="text-2xl font-bold mt-2">
+                  {analytics.products.reduce((sum, p) => sum + p.quantitySold, 0)}
                 </p>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                <TrendingUp className="h-6 w-6 text-blue-600" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Avaliação Média</p>
-                <p className="text-2xl font-bold mt-1 flex items-center gap-1">
-                  {stats.avgRating.toFixed(1)}
-                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                <p className="text-sm text-muted-foreground">Faturamento Total</p>
+                <p className="text-2xl font-bold mt-2">
+                  {formatCurrency(analytics.products.reduce((sum, p) => sum + p.revenue, 0))}
                 </p>
               </div>
-              <Star className="h-8 w-8 text-yellow-600" />
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Top Sellers */}
+      {/* Gráfico Top 10 */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-yellow-600" />
-                Mais Vendidos
-              </CardTitle>
-              <CardDescription>Produtos com maior volume de vendas</CardDescription>
-            </div>
-          </div>
+          <CardTitle>Top 10 Produtos por Faturamento</CardTitle>
+          <CardDescription>Os produtos que mais geram receita</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {topSellers.map((item, index) => (
-            <div key={item.id} className="flex items-center gap-4">
-              <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center font-bold text-yellow-600">
-                {index + 1}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold">{item.sales} vendas</p>
-                    <p className="text-sm text-muted-foreground">
-                      {item.revenue.toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL',
-                      })}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Progress
-                    value={(item.sales / topSellers[0].sales) * 100}
-                    className="h-2"
-                  />
-                  {item.trend === 'up' && (
-                    <Badge variant="default" className="gap-1 text-xs">
-                      <TrendingUp className="h-3 w-3" />
-                      {item.trendPercentage}%
-                    </Badge>
-                  )}
-                </div>
-              </div>
+        <CardContent>
+          {analytics.topProducts.length > 0 ? (
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={analytics.topProducts}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="productName"
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  interval={0}
+                />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: number) => formatCurrency(value)}
+                  labelFormatter={(label) => `Produto: ${label}`}
+                />
+                <Legend />
+                <Bar dataKey="revenue" fill="#10b981" name="Faturamento" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-muted-foreground">
+              Nenhum dado disponível
             </div>
-          ))}
+          )}
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Revenue */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-600" />
-              Maior Receita
-            </CardTitle>
-            <CardDescription>Produtos que mais geram receita</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {topRevenue.map((item, index) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-sm font-bold text-green-600">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.sales} vendas
-                    </p>
-                  </div>
-                </div>
-                <p className="font-semibold text-green-600">
-                  {item.revenue.toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL',
-                  })}
-                </p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Low Performers */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-orange-600" />
-              Atenção Necessária
-            </CardTitle>
-            <CardDescription>Produtos com baixo desempenho</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {lowPerformers.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900"
-              >
-                <div>
-                  <p className="font-medium">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">{item.category}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-orange-600">
-                    {item.sales} vendas
-                  </p>
-                  {item.trend === 'down' && (
-                    <Badge variant="destructive" className="gap-1 text-xs mt-1">
-                      <TrendingDown className="h-3 w-3" />
-                      {Math.abs(item.trendPercentage)}%
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* All Items Table */}
+      {/* Tabela de Produtos */}
       <Card>
         <CardHeader>
-          <CardTitle>Todos os Itens</CardTitle>
-          <CardDescription>Performance completa de cada produto</CardDescription>
+          <CardTitle>Todos os Produtos</CardTitle>
+          <CardDescription>
+            {sortedProducts.length} produto(s) vendido(s) no período
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {items.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium">{item.name}</p>
-                    <Badge variant="outline" className="text-xs">
-                      {item.category}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span>{item.sales} vendas</span>
-                    <span>
-                      {item.revenue.toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL',
-                      })}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                      {item.averageRating} ({item.reviewCount})
-                    </span>
-                  </div>
-                </div>
-                {item.trend === 'up' && (
-                  <Badge variant="default" className="gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    {item.trendPercentage}%
-                  </Badge>
-                )}
-                {item.trend === 'down' && (
-                  <Badge variant="destructive" className="gap-1">
-                    <TrendingDown className="h-3 w-3" />
-                    {Math.abs(item.trendPercentage)}%
-                  </Badge>
-                )}
-                {item.trend === 'stable' && (
-                  <Badge variant="secondary">Estável</Badge>
-                )}
-              </div>
-            ))}
-          </div>
+          {sortedProducts.length > 0 ? (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSort('productName')}
+                        className="h-8 px-2"
+                      >
+                        Produto
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSort('quantitySold')}
+                        className="h-8 px-2"
+                      >
+                        Qtd Vendida
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSort('revenue')}
+                        className="h-8 px-2"
+                      >
+                        Faturamento
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSort('ordersCount')}
+                        className="h-8 px-2"
+                      >
+                        Pedidos
+                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedProducts.map((product) => (
+                    <TableRow key={product.productId}>
+                      <TableCell className="font-medium">{product.productName}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {product.category}
+                      </TableCell>
+                      <TableCell className="text-right">{product.quantitySold}</TableCell>
+                      <TableCell className="text-right font-semibold text-green-600">
+                        {formatCurrency(product.revenue)}
+                      </TableCell>
+                      <TableCell className="text-right">{product.ordersCount}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-12">
+              Nenhum produto vendido no período selecionado
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
-} 
+};
+
+export default Items;

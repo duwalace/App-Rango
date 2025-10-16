@@ -7,6 +7,7 @@ export interface Store {
   description: string;
   logo: string;
   coverImage: string;
+  ownerId?: string; // ID do usuário dono da loja
   address: {
     street: string;
     number: string;
@@ -14,6 +15,11 @@ export interface Store {
     city: string;
     state: string;
     zipCode: string;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    formattedAddress?: string; // Endereço formatado pelo geocoding
   };
   contact: {
     phone: string;
