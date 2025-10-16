@@ -41,7 +41,7 @@ export interface MenuItem {
   ingredients?: string[];
   allergens?: string[];
   nutritionalInfo?: NutritionalInfo;
-  dietaryFlags: DietaryFlag[]; // vegetariano, vegano, sem glúten, etc
+  dietaryFlags?: DietaryFlag[]; // vegetariano, vegano, sem glúten, etc
   
   // Metadata e SEO
   tags: string[]; // Para busca e categorização
@@ -245,7 +245,7 @@ export interface ProductFormData {
   servingSize?: string;
   ingredients?: string[];
   allergens?: string[];
-  dietaryFlags: DietaryFlag[];
+  dietaryFlags?: DietaryFlag[];
   tags: string[];
 }
 

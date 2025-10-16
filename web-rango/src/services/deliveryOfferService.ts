@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Order } from '@/types/shared';
+import { removeUndefinedFields } from '@/utils/firestoreHelpers';
 
 interface DeliveryOfferData {
   order_id: string;
@@ -53,6 +54,36 @@ interface DeliveryOfferData {
 }
 
 /**
+ * Buscar entregadores disponíveis
+ */
+const getAvailableDeliveryPartners = async (): Promise<string[]> => {
+  try {
+    // Buscar entregadores online
+    const partnersQuery = query(
+      collection(db, 'delivery_partners'),
+      where('operational_status', 'in', ['online_idle', 'on_delivery'])
+    );
+    
+    const snapshot = await getDocs(partnersQuery);
+    const partnerIds: string[] = [];
+    
+    snapshot.forEach((doc) => {
+      partnerIds.push(doc.id);
+    });
+    
+    console.log(`✅ ${partnerIds.length} entregadores disponíveis encontrados`);
+    
+    // Se não houver entregadores online, retornar array vazio
+    // A oferta ainda será criada, mas ninguém verá até que alguém fique online
+    return partnerIds;
+  } catch (error) {
+    console.error('❌ Erro ao buscar entregadores disponíveis:', error);
+    // Em caso de erro, retornar array vazio
+    return [];
+  }
+};
+
+/**
  * Criar oferta de entrega para um pedido
  */
 export const createDeliveryOffer = async (order: Order): Promise<string> => {
@@ -63,7 +94,7 @@ export const createDeliveryOffer = async (order: Order): Promise<string> => {
     const existingOfferQuery = query(
       collection(db, 'delivery_offers'),
       where('order_id', '==', order.id),
-      where('status', 'in', ['available', 'pending', 'accepted'])
+      where('status', 'in', ['open', 'accepted'])
     );
     
     const existingOffers = await getDocs(existingOfferQuery);
@@ -84,7 +115,8 @@ export const createDeliveryOffer = async (order: Order): Promise<string> => {
       .join(', ')
       .substring(0, 100);
 
-    const offerData: DeliveryOfferData = {
+    // Preparar dados da oferta (campos opcionais podem ser undefined)
+    const offerData = {
       order_id: order.id!,
       store_id: order.storeId,
       store_name: order.storeName || 'Loja',
@@ -100,11 +132,13 @@ export const createDeliveryOffer = async (order: Order): Promise<string> => {
       delivery_address: {
         street: order.address?.street || 'Rua do Cliente',
         number: order.address?.number || '0',
-        complement: order.address?.complement,
+        complement: order.address?.complement, // Pode ser undefined
         neighborhood: order.address?.neighborhood || 'Bairro',
         city: order.address?.city || 'São José dos Campos',
         state: order.address?.state || 'SP',
         zipCode: order.address?.zipCode || '12345-000',
+        latitude: order.address?.latitude, // Pode ser undefined
+        longitude: order.address?.longitude, // Pode ser undefined
       },
       distance_km: estimatedDistance,
       partner_earning: partnerEarning,
@@ -114,10 +148,17 @@ export const createDeliveryOffer = async (order: Order): Promise<string> => {
       total_value: order.total || 0,
     };
 
-    // Criar oferta no Firestore
-    const offerRef = await addDoc(collection(db, 'delivery_offers'), {
+    // Buscar entregadores disponíveis (por enquanto, oferta visível para todos)
+    // TODO: Implementar busca geográfica de entregadores próximos
+    const availablePartners = await getAvailableDeliveryPartners();
+    
+    // Criar oferta no Firestore (removendo campos undefined)
+    const offerRef = await addDoc(collection(db, 'delivery_offers'), removeUndefinedFields({
       ...offerData,
-      status: 'available',
+      status: 'open', // Status correto para o app (não 'available')
+      visible_to_partners: availablePartners, // Array de IDs dos entregadores que podem ver
+      attempt_number: 1,
+      search_radius_km: 5, // Raio de busca inicial
       created_at: serverTimestamp(),
       expires_at: new Date(Date.now() + 10 * 60 * 1000), // Expira em 10 minutos
       assigned_partner_id: null,
@@ -125,7 +166,7 @@ export const createDeliveryOffer = async (order: Order): Promise<string> => {
       pickup_location: order.address?.latitude && order.address?.longitude 
         ? new GeoPoint(order.address.latitude, order.address.longitude)
         : null,
-    });
+    }));
 
     // Atualizar pedido com status de entrega
     if (order.id) {
